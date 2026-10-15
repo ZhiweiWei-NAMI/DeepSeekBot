@@ -37,6 +37,7 @@ export interface BotSummary {
   primaryColor?: BotPrimaryColor;
   avatarSeed?: 2;
   paused?: boolean;
+  subagentAdvisor?: boolean;
   deleted?: boolean;
   standingLimits?: StandingLimitsView;
   aggregateState: string;

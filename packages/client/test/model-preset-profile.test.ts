@@ -6,6 +6,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', async () => {
   const { createElement, forwardRef } = await import('react');
   return {
+    Switch: ({
+      checked,
+      disabled,
+      label,
+    }: {
+      checked: boolean;
+      disabled: boolean;
+      label: string;
+    }) =>
+      createElement('button', {
+        role: 'switch',
+        'aria-checked': checked,
+        'aria-label': label,
+        disabled,
+      }),
     Button: ({
       children,
       onClick,
@@ -150,7 +165,17 @@ async function render(actions: BridgeActions): Promise<HTMLDivElement> {
   document.body.append(container);
   root = createRoot(container);
   await act(async () =>
-    root!.render(createElement(ModelPresetProfile, { slug: 'ada', actions, t: translate })),
+    root!.render(
+      createElement(ModelPresetProfile, {
+        slug: 'ada',
+        actions: {
+          ...actions,
+          subagentAdvisor: actions.subagentAdvisor ?? (async () => false),
+          setSubagentAdvisor: actions.setSubagentAdvisor ?? (async (_slug, enabled) => enabled),
+        },
+        t: translate,
+      }),
+    ),
   );
   return container;
 }

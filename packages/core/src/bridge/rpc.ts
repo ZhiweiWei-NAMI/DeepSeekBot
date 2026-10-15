@@ -834,6 +834,10 @@ export class BotharnessBridgeService extends TypertRemoteService {
     return unwrapAsync(this.methods.approvalReviewerModelSet({ model }));
   }
 
+  subagentAdvisorSet(slug: string, enabled: boolean): { bot: PersonaBotDetail } {
+    return unwrap(this.methods.subagentAdvisorSet({ slug, enabled }));
+  }
+
   standingLimitsSet(slug: string, soul: number, coreMemory: number): { bot: PersonaBotDetail } {
     return unwrap(this.methods.standingLimitsSet({ slug, soul, coreMemory }));
   }
@@ -1826,6 +1830,7 @@ markRemoteMethods(BotharnessBridgeService.prototype, [
   'botApprovalTemplateSet',
   'approvalReviewerModel',
   'approvalReviewerModelSet',
+  'subagentAdvisorSet',
   'standingLimitsSet',
   'botAvatarSet',
   'botAppearanceSet',

@@ -625,6 +625,9 @@ export function parseBotSummary(value: unknown): BotSummary | undefined {
     ...(isBotPrimaryColor(record['primaryColor']) ? { primaryColor: record['primaryColor'] } : {}),
     ...(record['avatarSeed'] === 2 ? { avatarSeed: 2 as const } : {}),
     ...(typeof record['paused'] === 'boolean' ? { paused: record['paused'] } : {}),
+    ...(typeof record['subagentAdvisor'] === 'boolean'
+      ? { subagentAdvisor: record['subagentAdvisor'] }
+      : {}),
     ...(record['deleted'] === true ? { deleted: true } : {}),
     ...(parseStandingLimits(record['standingLimits']) ?? {}),
   };
@@ -1778,6 +1781,26 @@ export function parseOwnedSessionSummaries(value: unknown): OwnedSessionSummary[
 
 export async function loadBots(call: BridgeCall, signal?: AbortSignal): Promise<BotSummary[]> {
   return parseBotSummaries(await unwrap(call, 'list', {}, signal));
+}
+
+export async function loadSubagentAdvisor(call: BridgeCall, slug: string): Promise<boolean> {
+  const bot = (await loadBots(call)).find((bot) => bot.slug === slug);
+  if (bot === undefined) throw new Error('PersonaBot is unavailable');
+  return bot.subagentAdvisor === true;
+}
+
+export async function setSubagentAdvisor(
+  call: BridgeCall,
+  slug: string,
+  enabled: boolean,
+): Promise<boolean> {
+  const value = asRecord(await unwrap(call, 'subagentAdvisorSet', { slug, enabled }));
+  const rawBot = asRecord(value?.['bot']);
+  const bot = parseBotSummary(rawBot);
+  const advisor = rawBot?.['subagentAdvisor'];
+  if (bot?.slug !== slug || (advisor !== undefined && typeof advisor !== 'boolean'))
+    throw new Error('Invalid subagentAdvisorSet response');
+  return bot.subagentAdvisor === true;
 }
 
 export async function botExists(call: BridgeCall, slug: string): Promise<boolean> {

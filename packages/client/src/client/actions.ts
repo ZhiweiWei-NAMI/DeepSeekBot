@@ -16,7 +16,12 @@ import type {
 import type { PairingRequest, PairingReviewInput } from '../../../core/src/messaging/pairing.js';
 import type { SenderAccessInput } from '../../../core/src/messaging/sender-access.js';
 import { unreadAfterAnchor } from './timeline-position.js';
-import { reactToChannelMessage, searchChannelMessages } from './bridge.js';
+import {
+  reactToChannelMessage,
+  searchChannelMessages,
+  loadSubagentAdvisor,
+  setSubagentAdvisor,
+} from './bridge.js';
 import { toggledReactions } from './message-reactions-model.js';
 import {
   gitInstalling,
@@ -417,6 +422,8 @@ export interface BridgeActions {
     text: string,
   ): Promise<OutboxIntent>;
 
+  subagentAdvisor(slug: string): Promise<boolean>;
+  setSubagentAdvisor(slug: string, enabled: boolean): Promise<boolean>;
   modelCatalog(): Promise<ModelCatalogView>;
   modelPresets(): Promise<ModelPresetView[]>;
   modelPlan(slug: string): Promise<ModelPlanView | undefined>;
@@ -1545,6 +1552,8 @@ export function createActions(
       await actions.refreshChannelMessages(channelId).catch(() => undefined);
       return 'stopped';
     },
+    subagentAdvisor: (slug) => loadSubagentAdvisor(call, slug),
+    setSubagentAdvisor: (slug, enabled) => setSubagentAdvisor(call, slug, enabled),
     modelCatalog: () => loadModelCatalog(call),
     modelPresets: () => loadModelPresets(call),
     modelPlan: (slug) => loadModelPlan(call, slug),

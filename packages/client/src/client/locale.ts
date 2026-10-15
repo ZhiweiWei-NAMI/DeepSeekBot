@@ -1929,6 +1929,11 @@ export const zh = {
   'groupProfile.human': '我',
   'groupProfile.external': '外部来源：{source}',
   'groupProfile.system': '系统',
+  'subagentAdvisor.title': '子代理模型顾问',
+  'subagentAdvisor.description':
+    '默认关闭。每次未显式指定模型或 effort 时，至多请求一次顾问推荐 model + effort；仅限此 Bot 已允许的集合，失败沿用默认路由。',
+  'subagentAdvisor.notice': '保存开关不代表认证成功或模型可用；不会扩大允许集合。',
+  'subagentAdvisor.error': '无法读取或保存顾问设置；未确认更改，请重新打开后核对。',
   'modelPreset.title': '模型',
   'modelPreset.noPlan': '未设置，点击选择模型',
   'modelPreset.loadFailed': '读取此 Bot 的模型设置失败',
@@ -5580,6 +5585,13 @@ My relationship with you, established lore and topics to avoid: [fill in].
   'groupProfile.human': 'You',
   'groupProfile.external': 'External source: {source}',
   'groupProfile.system': 'System',
+  'subagentAdvisor.title': 'Subagent model advisor',
+  'subagentAdvisor.description':
+    'Off by default. When no model or effort is explicit, request at most one model + effort recommendation per delegation, within this Bot’s allowed set. On failure, keep the default route.',
+  'subagentAdvisor.notice':
+    'Saving this switch does not verify authentication or model availability and never expands the allowed set.',
+  'subagentAdvisor.error':
+    'Could not read or save the advisor setting. Changes are unconfirmed; reopen to check.',
   'modelPreset.title': 'Model',
   'modelPreset.noPlan': 'Not set. Click to choose a model',
   'modelPreset.loadFailed': "Could not load this Bot's model settings",

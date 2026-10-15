@@ -21,6 +21,8 @@ export const ONLINE_MANAGEMENT_COMMANDS = [
   'model-preset-create',
   'model-preset-apply',
   'model-plan',
+  'advisor-enable',
+  'advisor-disable',
   'channels',
 ] as const;
 
@@ -131,6 +133,8 @@ export async function runOnlineManagement(
   if (command === 'model-preset-apply')
     return rpc('modelPresetApply', { slug, presetId: values.preset!.trim() });
   if (command === 'model-plan') return rpc('modelPlan', { slug });
+  if (command === 'advisor-enable' || command === 'advisor-disable')
+    return rpc('subagentAdvisorSet', { slug, enabled: command === 'advisor-enable' });
   if (command === 'bot-delete-preview') return rpc('deletionPreview', { slug });
   if (command === 'bot-delete-confirm')
     return rpc('deletionConfirm', { slug, token: confirmation, eraseMemory: false });

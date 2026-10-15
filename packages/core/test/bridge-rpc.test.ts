@@ -260,6 +260,7 @@ describe('bridge typert service', () => {
       'botApprovalTemplateSet',
       'approvalReviewerModel',
       'approvalReviewerModelSet',
+      'subagentAdvisorSet',
       'standingLimitsSet',
       'botAvatarSet',
       'botAppearanceSet',

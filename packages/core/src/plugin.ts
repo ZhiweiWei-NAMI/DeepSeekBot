@@ -195,9 +195,45 @@ import { ActivityToolDetails, createToolDetailIndex } from './state/tool-details
 import { createDshActivityProjection } from './state/dsh-activity.js';
 import { readPublicToolDetail } from './state/tool-activity.js';
 import { createUsageProjection, type UsageProjection } from './usage/usage.js';
+import {
+  createFetchAdvisorTransport,
+  createSubagentAdvisor,
+  type AdvisorRecord,
+  type SubagentAdvisor,
+} from './models/subagent-advisor.js';
 import { installBotSubagentModelTools } from './runtime/subagent-model-tools.js';
 
 export const name = 'botharness-core';
+
+const SUBAGENT_ADVISOR_CREDENTIAL = 'OPENCODE_CONSOLE_API_KEY';
+
+function botAdvisorOptions(
+  ctx: Context,
+  registry: { get(slug: string): { readonly subagentAdvisor?: boolean } | undefined },
+  slug: string,
+): { advisor: () => SubagentAdvisor | undefined } {
+  const log = (record: AdvisorRecord): void => {
+    ctx.logger.warn('subagent-model-advisor %j', record);
+  };
+  return {
+    advisor: () =>
+      registry.get(slug)?.subagentAdvisor === true
+        ? createSubagentAdvisor({
+            enabled: true,
+            transport: createFetchAdvisorTransport({
+              authorization: async () => {
+                const credentials = ctx.get('credentials') as unknown as
+                  | { resolve(ref: string): Promise<{ value: string } | undefined> }
+                  | undefined;
+                if (credentials === undefined) return undefined;
+                return (await credentials.resolve(SUBAGENT_ADVISOR_CREDENTIAL))?.value;
+              },
+            }),
+            log,
+          })
+        : undefined,
+  };
+}
 
 const PUSH_TOPICS = new Set([
   'source-event',
@@ -2173,6 +2209,7 @@ export function apply(ctx: Context, config: BotHarnessConfig): void {
           agent.ctx,
           agent,
           () => core.registry.get(owner.botSlug)?.modelPlan,
+          botAdvisorOptions(ctx, core.registry, owner.botSlug),
         );
       }
     },

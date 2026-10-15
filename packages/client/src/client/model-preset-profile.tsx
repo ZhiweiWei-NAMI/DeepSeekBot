@@ -32,6 +32,7 @@ import {
 } from './model-plan-store.js';
 import { useMountedResource } from './mounted-resource.js';
 import { SidebarCardList, SidebarCardRow } from './sidebar-card.js';
+import { SubagentAdvisorSetting } from './subagent-advisor-setting.js';
 
 const styles = stylex.create({
   source: {
@@ -689,6 +690,7 @@ export function ModelPresetProfile({
           />
         )}
       </SidebarCardList>
+      <SubagentAdvisorSetting key={slug} slug={slug} actions={actions} t={t} />
       {editorOpen ? null : messages}
       {editorOpen && (
         <PanelDialog

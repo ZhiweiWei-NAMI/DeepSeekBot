@@ -114,6 +114,8 @@ const NO_INSTALL = { installable: false, install: { phase: 'idle' as const } };
 
 function stubActions(): BridgeActions {
   return {
+    subagentAdvisor: vi.fn(async () => false),
+    setSubagentAdvisor: vi.fn(async (_slug, enabled) => enabled),
     channelHistory: vi.fn(),
     channelHistorySources: vi.fn(),
     channelPurgePreview: vi.fn(),

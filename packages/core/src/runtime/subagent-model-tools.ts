@@ -10,7 +10,16 @@ import {
   type ModelRoute,
   type PersonaBotModelPlan,
 } from '../models/presets.js';
-import { resolveSubagentRoute } from '../models/subagent-route.js';
+import {
+  advisorCandidates,
+  advisorLabelHash,
+  advisorRouteEquals,
+  advisorRouteFor,
+  advisorRouteLabel,
+  type AdvisorOutcome,
+  type SubagentAdvisor,
+} from '../models/subagent-advisor.js';
+import { resolveSubagentRoute, type SubagentRouteDecision } from '../models/subagent-route.js';
 
 type DelegationProvider = 'spawn' | 'fork';
 
@@ -54,6 +63,7 @@ function installOne(
   ctx: Context,
   provider: DelegationProvider,
   resolvePlan: () => PersonaBotModelPlan | undefined,
+  advisor: (() => SubagentAdvisor | undefined) | undefined,
 ): void {
   const name = provider === 'spawn' ? 'bot_subagent' : 'bot_subagent_fork';
   ctx.tools.register(
@@ -90,24 +100,102 @@ function installOne(
         if (parent === undefined) throw new Error(`${name} requires a calling Agent`);
         const subagents = ctx.get('subagents');
         if (subagents === undefined) throw new Error('DSH Subagent service is unavailable');
-        const decision = resolveSubagentRoute(
-          resolvePlan(),
-          parentAgentOptionsForDelegation(parent),
-          args,
-        );
-        const options = agentOptions(parentAgentOptionsForDelegation(parent), decision.route);
+        const plan = resolvePlan();
+        const parentOptions = parentAgentOptionsForDelegation(parent);
+        const explicitModelFields =
+          args.provider !== undefined ||
+          args.model !== undefined ||
+          args.reasoning_effort !== undefined;
+        const activeAdvisor = advisor?.();
+        const advised =
+          activeAdvisor === undefined || explicitModelFields || plan === undefined
+            ? undefined
+            : await activeAdvisor.advise({
+                plan,
+                tool: name,
+                label: args.description,
+                promptExcerpt: args.prompt,
+                signal: exec.signal,
+              });
+        const proposal: AdvisorOutcome | undefined =
+          advised !== undefined && advised.source === 'advisor' ? advised : undefined;
+        let pending: { provider: string; model: string; effort: string } | undefined =
+          proposal === undefined
+            ? undefined
+            : {
+                provider: proposal.route.provider,
+                model: proposal.route.model,
+                effort: proposal.route.reasoningEffort ?? '',
+              };
+        const resolveAgainst = (
+          planNow: PersonaBotModelPlan | undefined,
+        ): SubagentRouteDecision => {
+          if (pending === undefined) return resolveSubagentRoute(planNow, parentOptions, args);
+          if (planNow === undefined)
+            throw new Error('Apply a Model Preset before selecting a Subagent model');
+          return { route: advisorRouteFor(planNow, pending.provider, pending.model, pending.effort) };
+        };
+        let decision = resolveAgainst(plan);
+        let options = agentOptions(parentOptions, decision.route);
         const llm = ctx.get('llm');
         if (llm === undefined) throw new Error('DSH LLM service is unavailable');
-        await llm.resolveCallConfig(
-          {
-            provider: decision.route.provider,
-            model: decision.route.model,
-            ...(decision.route.reasoningEffort === undefined
-              ? {}
-              : { reasoningEffort: ReasoningEffortId(decision.route.reasoningEffort) }),
-          },
-          exec.signal,
-        );
+        const probe = async (route: ModelRoute): Promise<void> => {
+          await llm.resolveCallConfig(
+            {
+              provider: route.provider,
+              model: route.model,
+              ...(route.reasoningEffort === undefined
+                ? {}
+                : { reasoningEffort: ReasoningEffortId(route.reasoningEffort) }),
+            },
+            exec.signal,
+          );
+          exec.signal.throwIfAborted();
+        };
+        if (proposal === undefined) {
+          await probe(decision.route);
+        } else {
+          try {
+            await probe(decision.route);
+          } catch (error) {
+            if (plan === undefined) throw error;
+            exec.signal.throwIfAborted();
+            const fallback = resolveSubagentRoute(plan, parentOptions, {});
+            if (advisorRouteEquals(fallback.route, decision.route)) throw error;
+            activeAdvisor?.record({
+              source: 'fallback',
+              reason: 'suggested-route-unavailable',
+              tool: name,
+              planRevision: plan.revision,
+              route: advisorRouteLabel(fallback.route),
+              calls: 0,
+              latencyMs: 0,
+              candidates: advisorCandidates(plan).length,
+              labelHash: advisorLabelHash(args.description),
+            });
+            pending = undefined;
+            decision = fallback;
+            options = agentOptions(parentOptions, fallback.route);
+            await probe(fallback.route);
+          }
+        }
+        const confirmed = resolveAgainst(resolvePlan());
+        if (!advisorRouteEquals(confirmed.route, decision.route)) {
+          exec.signal.throwIfAborted();
+          decision = confirmed;
+          options = agentOptions(parentOptions, confirmed.route);
+          await probe(confirmed.route);
+        }
+        const finalPlan = resolvePlan();
+        if (plan !== undefined && finalPlan === undefined)
+          throw new Error('Apply a Model Preset before selecting a Subagent model');
+        if (finalPlan !== undefined)
+          advisorRouteFor(
+            finalPlan,
+            decision.route.provider,
+            decision.route.model,
+            decision.route.reasoningEffort ?? '',
+          );
         exec.signal.throwIfAborted();
         const maxDepth = subagents.resolveMaxDepth();
         const request: Omit<SubagentStartRequest, 'label' | 'signal'> = {
@@ -169,10 +257,15 @@ function installOne(
   );
 }
 
+export interface BotSubagentModelToolsOptions {
+  readonly advisor?: () => SubagentAdvisor | undefined;
+}
+
 export function installBotSubagentModelTools(
   ctx: Context,
   agent: Agent,
   resolvePlan: () => PersonaBotModelPlan | undefined,
+  options?: BotSubagentModelToolsOptions,
 ): void {
   if (ctx.get('subagents') === undefined) return;
   ctx.tools.guard((execution) =>
@@ -187,8 +280,8 @@ export function installBotSubagentModelTools(
     order: 10_360,
     text: 'For DSH Subagents in this PersonaBot, use bot_subagent or bot_subagent_fork. Call list_bot_subagent_models before an explicit model choice. The current Human-selected Assignment model set is checked when each child starts.',
   });
-  installOne(ctx, 'spawn', resolvePlan);
-  installOne(ctx, 'fork', resolvePlan);
+  installOne(ctx, 'spawn', resolvePlan, options?.advisor);
+  installOne(ctx, 'fork', resolvePlan, options?.advisor);
   ctx.tools.register(
     defineTool({
       name: 'list_bot_subagent_models',

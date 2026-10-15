@@ -238,6 +238,19 @@ describe('createPersonaBotRegistry', () => {
     expect(off?.computerAccess).toBe(true);
   });
 
+  it('persists the Subagent model advisor opt-in through record serialization and reload', () => {
+    const root = createRoot();
+    const registry = createTestRegistry({ rootDir: root });
+    registry.create({ slug: 'advisor-qa', displayName: 'Advisor QA' });
+    expect(registry.get('advisor-qa')?.subagentAdvisor).not.toBe(true);
+    expect(registry.setSubagentAdvisor('advisor-qa', true).ok).toBe(true);
+    const reopened = createTestRegistry({ rootDir: root });
+    expect(reopened.get('advisor-qa')?.subagentAdvisor).toBe(true);
+    expect(reopened.setSubagentAdvisor('advisor-qa', false).ok).toBe(true);
+    const off = createTestRegistry({ rootDir: root }).get('advisor-qa');
+    expect(off?.subagentAdvisor).not.toBe(true);
+  });
+
   it('provisions the Memory directory for a name-only bot but writes no Persona', () => {
     const root = createRoot();
     const registry = createTestRegistry({ rootDir: root });

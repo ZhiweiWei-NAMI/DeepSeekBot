@@ -307,6 +307,7 @@ export interface PersonaBotSummary {
   primaryColor?: BotPrimaryColor;
   avatarSeed?: 2;
   paused?: boolean;
+  subagentAdvisor?: boolean;
   deleted?: boolean;
   approvalTemplate?: string;
   standingLimits: StandingLimits;
@@ -673,6 +674,7 @@ export interface BridgeMethods {
   developerModeSet(payload: unknown): BridgeResult<{ accepted: boolean }>;
   computerAccessSet(payload: unknown): BridgeResult<{ bot: PersonaBotDetail }>;
   browserAccessSet(payload: unknown): BridgeResult<{ bot: PersonaBotDetail }>;
+  subagentAdvisorSet(payload: unknown): BridgeResult<{ bot: PersonaBotDetail }>;
   browserProfileSet(payload: unknown): BridgeResult<{ bot: PersonaBotDetail }>;
   approvalTemplates(
     payload?: unknown,
@@ -1112,6 +1114,9 @@ function summarize(record: PersonaBotRecord, snapshot: BotStateSnapshot): Person
     ...(record.browserAccess === undefined ? {} : { browserAccess: record.browserAccess }),
     ...(record.browserProfile === undefined ? {} : { browserProfile: record.browserProfile }),
     ...(record.approvalTemplate === undefined ? {} : { approvalTemplate: record.approvalTemplate }),
+    ...(record.subagentAdvisor === undefined
+      ? {}
+      : { subagentAdvisor: record.subagentAdvisor }),
   };
 }
 
@@ -2627,6 +2632,16 @@ export function createBridgeMethods(deps: BridgeMethodsDeps): BridgeMethods {
       const result = deps.registry.setBrowserAccess(slug, enabled);
       if (!result.ok) return unknownBot(slug);
       deps.browserAccess?.changed(slug);
+      return { ok: true, value: detailOf(result.record) };
+    },
+    subagentAdvisorSet(payload) {
+      const slug = asSlug(payload);
+      const enabled = asObject(payload)['enabled'];
+      if (slug === undefined || typeof enabled !== 'boolean') {
+        return invalidInput('slug and enabled are required');
+      }
+      const result = deps.registry.setSubagentAdvisor(slug, enabled);
+      if (!result.ok) return unknownBot(slug);
       return { ok: true, value: detailOf(result.record) };
     },
     browserProfileSet(payload) {

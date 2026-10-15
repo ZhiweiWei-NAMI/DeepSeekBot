@@ -136,6 +136,8 @@ Usage:
                                   --assignment-model <m> [--assignment-effort <e>] [--home <dsh-home>]
   deepseekbot model-preset-apply <id> --preset <preset-id> [--home <dsh-home>]
   deepseekbot model-plan <id> [--home <dsh-home>]
+  deepseekbot advisor-enable <id> [--home <dsh-home>]
+  deepseekbot advisor-disable <id> [--home <dsh-home>]
   deepseekbot pause <id> [--home <dsh-home>]
   deepseekbot resume <id> [--home <dsh-home>]
   deepseekbot update <id> [--name <name>] [--description <text>] [--role <tag> ...] [--home <dsh-home>]
@@ -1503,6 +1505,27 @@ function runModelPlan(
   }
 }
 
+function runSubagentAdvisor(
+  id: string,
+  enabled: boolean,
+  values: CreateValues,
+  io: BotCreateCliIo,
+): { bot: { id: string; name: string }; subagentAdvisor: boolean } {
+  const slug = id.trim();
+  if (slug.length === 0)
+    throw usageError('advisor-enable and advisor-disable need exactly one bot id.');
+  const dshHome = resolveHome(values, io);
+  const { owner, registry } = openRegistry(dshHome);
+  try {
+    const result = registry.setSubagentAdvisor(slug, enabled);
+    if (!result.ok) throw new CliFailure('unknown-bot', `Unknown bot: ${slug}`, 1);
+    io.stderr(`deepseekbot: subagent advisor ${enabled ? 'enabled' : 'disabled'} for ${slug}`);
+    return { bot: { id: slug, name: result.record.displayName }, subagentAdvisor: enabled };
+  } finally {
+    owner.close();
+  }
+}
+
 function openChannels(
   dshHome: string,
   owner: OperationalDatabaseOwner,
@@ -2425,6 +2448,11 @@ const SEARCH_INDEX: ReadonlyArray<{ command: string; description: string }> = [
   { command: 'model-preset-create', description: 'create a model preset from provider routes' },
   { command: 'model-preset-apply', description: 'apply a model preset to a bot' },
   { command: 'model-plan', description: 'show a bot model plan' },
+  {
+    command: 'advisor-enable',
+    description: 'let one bounded advisor suggest an allowed Subagent model per delegation',
+  },
+  { command: 'advisor-disable', description: 'delegate Subagent model choice to the model again' },
   { command: 'memory-snapshot', description: 'read a bot memory snapshot' },
   { command: 'memory-file', description: 'read one bot memory file' },
   { command: 'memory-history', description: 'list bot memory commits' },
@@ -2612,6 +2640,18 @@ export async function runBotCreateCli(
     if (command === 'model-plan') {
       if (rest.length !== 1) throw usageError('model-plan needs exactly one bot id.');
       out.stdout(JSON.stringify(runModelPlan(rest[0]!, values, io), null, 2));
+      return 0;
+    }
+    if (command === 'advisor-enable' || command === 'advisor-disable') {
+      if (rest.length !== 1)
+        throw usageError('advisor-enable and advisor-disable need exactly one bot id.');
+      out.stdout(
+        JSON.stringify(
+          runSubagentAdvisor(rest[0]!, command === 'advisor-enable', values, io),
+          null,
+          2,
+        ),
+      );
       return 0;
     }
     if (command === 'channel-human-name-set') {

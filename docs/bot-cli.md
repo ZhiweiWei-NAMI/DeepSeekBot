@@ -20,6 +20,8 @@ deepseekbot model-preset-create --name <preset> --orchestrator-provider <p> --or
                                 --assignment-model <m> [--assignment-effort <e>] [--home <dsh-home>]
 deepseekbot model-preset-apply <id> --preset <preset-id> [--home <dsh-home>]
 deepseekbot model-plan <id> [--home <dsh-home>]
+deepseekbot advisor-enable <id> [--home <dsh-home>]
+deepseekbot advisor-disable <id> [--home <dsh-home>]
 deepseekbot pause <id> [--home <dsh-home>]
 deepseekbot resume <id> [--home <dsh-home>]
 deepseekbot update <id> [--name <name>] [--description <text>] [--role <tag> ...] [--home <dsh-home>]
