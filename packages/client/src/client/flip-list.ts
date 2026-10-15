@@ -7,7 +7,7 @@ export function useFlipList<T extends HTMLElement>(): RefObject<T> {
     const root = container.current;
     if (root === null) return;
     const next = new Map<string, number>();
-    // Compare list-local positions: scrolling an ancestor is not a row reorder.
+
     const origin = root.getBoundingClientRect().top - root.scrollTop;
     const reduced =
       typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
