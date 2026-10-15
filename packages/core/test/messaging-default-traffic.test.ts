@@ -2147,8 +2147,7 @@ it('Weixin sender permissions say the platform has no Role policy instead of rep
   const fresh = (id: string) => dm(id, { at: new Date(Date.now() + 1000).toISOString() });
   await fx.receive(fresh('weixin-first'));
   const source = fx.sourceId('om-weixin-first');
-  // Weixin has no scoped sender namespace, so a stored implicit grant must not be read as a
-  // replaced binding: that answer told the Bot to rebind and to move the chat to the Web UI.
+
   expect(fx.core.externalMessaging.senderPermissions('ada', source)).toMatchObject({
     status: 'unavailable',
     reason: 'role-policy-not-supported-for-platform',
@@ -2156,7 +2155,7 @@ it('Weixin sender permissions say the platform has no Role policy instead of rep
   expect(fx.core.externalMessaging.senderPermissions('ada', source).reason).not.toBe(
     'binding-replaced',
   );
-  // A disabled identity and a real rebind must not change the platform answer either.
+
   await fx.update({ enabled: false });
   expect(fx.core.externalMessaging.senderPermissions('ada', source)).toMatchObject({
     status: 'unavailable',

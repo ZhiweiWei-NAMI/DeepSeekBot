@@ -145,8 +145,7 @@ export function readSenderPermissions(
   at: Date,
 ): SenderPermissions {
   const queriedAt = at.toISOString();
-  // The Role policy has no scoped sender namespace outside Feishu and Slack DMs (chat-sender.ts),
-  // so say that plainly instead of reporting a missing identity or a replaced binding.
+
   if (!chatPairingApplies(event))
     return { queriedAt, status: 'unavailable', reason: 'role-policy-not-supported-for-platform' };
   const sender = trustedSenderReference(db, botSlug, event);
