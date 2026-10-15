@@ -84,6 +84,36 @@ function contiguous(snapshot: ConversationSnapshot): boolean {
 }
 
 describe('DM conversation', () => {
+  it('keeps consuming journal entries when web-only dispatch notifications arrive', async () => {
+    const host = new FakeHost();
+    const channel = host.channel(DM);
+    seed(channel, 2);
+    const target = open(host);
+    await until(target, (snapshot) => snapshot.status === 'live');
+    channel.emit({
+      type: 'notification',
+      notification: {
+        kind: 'subagent-dispatch-baseline',
+        channelId: DM,
+        dispatches: [{ messageId: 'dispatch-card', subagentDispatch: { status: 'running' } }],
+      },
+    });
+    channel.emit({
+      type: 'notification',
+      notification: {
+        kind: 'subagent-dispatch',
+        channelId: DM,
+        messageId: 'dispatch-card',
+        subagentDispatch: { status: 'completed' },
+      },
+    });
+    channel.append({ id: 'after-dispatch', body: 'next reply', author: { kind: 'bot', slug: SLUG } });
+    const next = await until(target, (snapshot) => snapshot.messages.length === 3);
+    expect(next.status).toBe('live');
+    expect(ids(next)).toEqual(['human-1', 'bot-2', 'after-dispatch']);
+    expect(revisions(next)).toEqual([1, 2, 3]);
+  });
+
   it('opens on the Host tail page and pages older history without gaps or duplicates', async () => {
     const host = new FakeHost();
     seed(host.channel(DM), 25);

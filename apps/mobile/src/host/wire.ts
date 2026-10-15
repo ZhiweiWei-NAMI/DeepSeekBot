@@ -82,6 +82,17 @@ export type ChannelNotification =
   | { kind: 'admission'; channelId: string; messageId: string }
   | { kind: 'human-read'; channelId: string; humanId: string; revision: number }
   | { kind: 'reaction'; channelId: string; messageId: string; reactions: WireReaction[] }
+  | {
+      kind: 'subagent-dispatch';
+      channelId: string;
+      messageId: string;
+      subagentDispatch: unknown;
+    }
+  | {
+      kind: 'subagent-dispatch-baseline';
+      channelId: string;
+      dispatches: { messageId: string; subagentDispatch: unknown }[];
+    }
   | { kind: 'draft-baseline'; channelId: string; revision: number; drafts: WireDraft[] }
   | { kind: 'draft'; draft: WireDraft }
   | { kind: 'draft-append'; append: WireDraftAppend }
