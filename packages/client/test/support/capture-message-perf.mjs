@@ -1,5 +1,3 @@
-// Run after BH_PERF_FIXTURE=1 vitest run packages/client/test/message-perf-render.test.ts.
-// Uses an existing local Chromium only; never starts a Host or contacts a provider.
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { readdir, writeFile } from 'node:fs/promises';

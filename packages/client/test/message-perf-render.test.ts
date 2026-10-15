@@ -13,8 +13,6 @@ import { CSS } from '../src/client/styles.js';
 import type { ChannelMessage } from '../src/client/store.js';
 import { measuredMessage, measuredPerf } from './support/message-perf-fixture.js';
 
-// The measured row and plain-text body use the real production component and CSS.
-// Native shell primitives are not mounted in this offline fixture.
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   MarkdownText: () => null,
   FileTypeIcon: () => null,

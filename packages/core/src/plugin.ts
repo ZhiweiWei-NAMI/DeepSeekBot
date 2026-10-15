@@ -2153,8 +2153,7 @@ export function apply(ctx: Context, config: BotHarnessConfig): void {
         ctx.logger.warn('approval-result-publication-failed');
       }
       core.usage?.handleSessionEvent(session.id, event);
-      // The fold runs synchronously with the append, so a `channel_send` tool
-      // executed later in the same step already sees this step's settlement.
+
       messagePerf.handleSessionEvent(session.id, event);
       handleCompactionEvent(
         {

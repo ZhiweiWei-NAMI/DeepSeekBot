@@ -14,12 +14,10 @@ import type { DshSessionEvent } from '../src/sessions/source.js';
 import { FakeAgentHost } from './dsh-agent-host-fixture.js';
 import { createTempRoot } from './helpers.js';
 
-/** One durable packed text run; the exact shape `assistantStreamFirstTokenTime` reads. */
 function textRun(time0: number, texts: string[]): unknown {
   return { type: 'text-chunks', time0, index: 0, dt: [], texts };
 }
 
-/** One durable packed Tool-call run, whose name makes its first member a token. */
 function toolRun(time0: number, args: string[]): unknown {
   return {
     type: 'tool-call-chunks',
@@ -127,7 +125,7 @@ describe('message perf fold', () => {
     });
     tracker.handleSessionEvent('s', settled);
     tracker.handleSessionEvent('s', settled);
-    // A replay that kept its seq while a parallel observer renumbered it.
+
     tracker.handleSessionEvent(
       's',
       settlement({ seq: 3, time: 2_000, stream: [textRun(1_600, ['你'])], outputTokens: 40 }),
@@ -145,7 +143,7 @@ describe('message perf fold', () => {
       settlement({ seq: 2, time: 2_000, stream: [textRun(1_600, ['你'])], outputTokens: 40 }),
     );
     tracker.handleSessionEvent('s', event('step/end', 3, 2_100, { turn: 1, step: 0 }));
-    // The reply is sent here, inside step 1.
+
     tracker.handleSessionEvent('s', stepStart(4, 3_000, 1, 1));
     tracker.handleSessionEvent(
       's',
@@ -324,7 +322,6 @@ describe('message perf fold', () => {
       steps: 1,
     });
 
-    // The next turn of `s` folds from scratch.
     tracker.handleSessionEvent('s', stepStart(10, 6_000, 2, 0));
     tracker.handleSessionEvent(
       's',
@@ -414,12 +411,6 @@ describe('message perf through the Host wiring', () => {
     return { ctx, core, dshHome, host };
   }
 
-  /**
-   * The runtime wakes a Bot again with a `[Triage]` prompt while Inbox items
-   * stay open. That turn is Host bookkeeping, not a reply: it appends no
-   * generation events and calls no reply transport, which is what the model
-   * would do with `inbox_resolve`.
-   */
   function isTriageTurn(host: FakeAgentHost, sessionId: string): boolean {
     const message = host.received.get(sessionId)?.at(-1);
     return JSON.stringify(message ?? '').includes('[Triage]');
@@ -519,7 +510,6 @@ describe('message perf through the Host wiring', () => {
       core.channels.readMessages(dm.id).find((message) => message.id === 'human-1')?.perf,
     ).toBeUndefined();
 
-    // A direct Bot tool run has no turn: it must not borrow the last one.
     const direct = await core.runtime.runDirectBotTool!(
       'ada',
       'channel_send',
@@ -560,7 +550,7 @@ describe('message perf through the Host wiring', () => {
         session.append('step/end', { turn, step: 0 }, 2_100);
         return;
       }
-      // Turn 2: one tool-only step, then two sends inside the answering step.
+
       session.append('step/start', { turn, step: 0 }, 3_000);
       session.append(
         'assistant/message',
@@ -625,7 +615,7 @@ describe('message perf through the Host wiring', () => {
       ttftMs: 600,
       steps: 1,
     });
-    // The later turn sums both of its steps, and the first turn's message kept its own numbers.
+
     for (const reply of replies.slice(1)) {
       expect(reply.perf).toEqual({
         sessionId: orchestratorSession,

@@ -1,7 +1,6 @@
 import type { ChannelMessage } from '../../src/client/store.js';
 import type { MessagePerf } from '../../src/client/message-perf.js';
 
-// Synthetic provider measurements only; no real session, prompt, or credential data.
 export const measuredPerf: MessagePerf = {
   sessionId: 'fixture-session',
   turn: 2,

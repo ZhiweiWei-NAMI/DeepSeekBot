@@ -228,11 +228,6 @@ export interface DshBotAgentAdapterOptions {
   ensureWorkspace?: (path: string) => void;
   publishDraft?: (event: ChannelDraftEvent) => void;
 
-  /**
-   * Per-message generation performance folded from live Session events. When
-   * absent (or when no turn snapshot is measurable), a reply transport message
-   * carries no `perf`.
-   */
   messagePerf?: MessagePerfTracker;
 
   authorizeBorrow?: (agent: Agent, role: 'orchestrator' | 'assignment') => void;
@@ -3466,12 +3461,6 @@ class DshBotAgentAdapter implements BotAgentAdapter {
     );
   }
 
-  /**
-   * The current turn's generation snapshot for one Session, shaped for a
-   * `channels.send` argument. Only the model reply transports (`channel_send`,
-   * `bot_dm_send`) take it: a Host-authored notice sent inside a turn is not
-   * model output and carries no `perf`.
-   */
   #sendPerf(sessionId: string): { perf?: ChannelMessagePerf } {
     const perf = this.#messagePerf?.forSession(sessionId);
     return perf === undefined ? {} : { perf };

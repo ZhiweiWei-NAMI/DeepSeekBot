@@ -1,16 +1,15 @@
 import type { ChannelMessage } from './store.js';
 
-/** Host-set snapshot of settled model samples for this send, never a live estimate. */
 export interface MessagePerf {
   sessionId: string;
   turn: number;
-  /** Provider output tokens with matching decode timing (DSH's decodeTokens). */
+
   outputTokens: number;
-  /** Sum of first-token → assistant/message durations, in milliseconds. */
+
   decodeMs: number;
-  /** First measured sample's step/start → first token, in milliseconds. */
+
   ttftMs: number | null;
-  /** Number of settled samples included, not the Session's step/end count. */
+
   steps: number;
 }
 
@@ -44,7 +43,6 @@ function isMessagePerf(value: unknown): value is MessagePerf {
   );
 }
 
-/** Invalid optional telemetry must not discard the message itself. */
 export function parseMessagePerf(value: unknown): MessagePerf | undefined {
   if (!isMessagePerf(value)) return undefined;
   const { sessionId, turn, outputTokens, decodeMs, ttftMs, steps } = value;
