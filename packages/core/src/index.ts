@@ -66,9 +66,12 @@ export type {
   ChannelMessage,
   ChannelMessageAuthor,
   ChannelMessageExternal,
+  ChannelMessagePerf,
   ChannelRecord,
   ChannelType,
 } from './channels/channel.js';
+export { createMessagePerfTracker } from './usage/message-perf.js';
+export type { MessagePerfTracker } from './usage/message-perf.js';
 export { createChannelStore, DEFAULT_MESSAGE_PAGE, MAX_MESSAGE_PAGE } from './channels/store.js';
 export type {
   ChannelMessageQueryOptions,

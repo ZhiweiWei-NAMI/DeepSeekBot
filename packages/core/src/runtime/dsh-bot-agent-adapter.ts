@@ -26,7 +26,8 @@ import type { InboxOpenFilter } from './inbox-triage.js';
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy';
 import { setApprovalPolicy } from '@deepseek-ai/dsh-user-approval';
 
-import type { GroupInvitation, GroupJoinRequest } from '../channels/channel.js';
+import type { ChannelMessagePerf, GroupInvitation, GroupJoinRequest } from '../channels/channel.js';
+import type { MessagePerfTracker } from '../usage/message-perf.js';
 import type { PersonaBotRecord } from '../bots/persona-bot.js';
 import {
   assignmentModelsOf,
@@ -227,6 +228,13 @@ export interface DshBotAgentAdapterOptions {
   ensureWorkspace?: (path: string) => void;
   publishDraft?: (event: ChannelDraftEvent) => void;
 
+  /**
+   * Per-message generation performance folded from live Session events. When
+   * absent (or when no turn snapshot is measurable), a reply transport message
+   * carries no `perf`.
+   */
+  messagePerf?: MessagePerfTracker;
+
   authorizeBorrow?: (agent: Agent, role: 'orchestrator' | 'assignment') => void;
 
   onOrchestratorFileSetup?: (agentCtx: Context, agent: Agent) => Promise<() => Promise<void>>;
@@ -375,6 +383,7 @@ class DshBotAgentAdapter implements BotAgentAdapter {
   readonly #stoppedBots = new Set<string>();
   readonly #humanStops = new Set<string>();
   readonly #drafts: ChannelDraftTracker;
+  readonly #messagePerf: MessagePerfTracker | undefined;
   #closed = false;
 
   constructor(options: DshBotAgentAdapterOptions) {
@@ -392,6 +401,7 @@ class DshBotAgentAdapter implements BotAgentAdapter {
     this.#resolveAgentPresets = options.resolveAgentPresets;
     this.#ensureWorkspace =
       options.ensureWorkspace ?? ((path) => void mkdirSync(path, { recursive: true }));
+    this.#messagePerf = options.messagePerf;
     this.#drafts = new ChannelDraftTracker(options.publishDraft ?? (() => undefined));
   }
 
@@ -3330,6 +3340,7 @@ class DshBotAgentAdapter implements BotAgentAdapter {
             body: args.body,
             ...(args.reply_to === undefined ? {} : { replyTo: args.reply_to }),
             ...(exec.callId === undefined ? {} : { deliveryKey: String(exec.callId) }),
+            ...this.#sendPerf(run.sessionId),
           });
           return `Sent Bot DM ${sent.message.id} in Channel ${sent.channelId}.`;
         },
@@ -3440,6 +3451,7 @@ class DshBotAgentAdapter implements BotAgentAdapter {
             ...(args.mention_human_ids === undefined
               ? {}
               : { mentionHumanIds: args.mention_human_ids }),
+            ...this.#sendPerf(run.sessionId),
           });
           const draftChannelId = args.channel_id ?? run.inboundChannelId;
           if (draftChannelId !== undefined)
@@ -3452,6 +3464,17 @@ class DshBotAgentAdapter implements BotAgentAdapter {
         },
       }),
     );
+  }
+
+  /**
+   * The current turn's generation snapshot for one Session, shaped for a
+   * `channels.send` argument. Only the model reply transports (`channel_send`,
+   * `bot_dm_send`) take it: a Host-authored notice sent inside a turn is not
+   * model output and carries no `perf`.
+   */
+  #sendPerf(sessionId: string): { perf?: ChannelMessagePerf } {
+    const perf = this.#messagePerf?.forSession(sessionId);
+    return perf === undefined ? {} : { perf };
   }
 
   directTools(): DirectBotToolSpec[] {

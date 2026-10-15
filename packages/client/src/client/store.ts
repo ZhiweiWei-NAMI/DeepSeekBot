@@ -242,6 +242,7 @@ export interface ChannelMessage {
   failed?: string;
   unconfirmed?: boolean;
   streaming?: boolean;
+  perf?: import('./message-perf.js').MessagePerf;
 }
 
 export interface ChannelDraft {

@@ -32,6 +32,12 @@ import type { BridgeActions, HostDirectoryListing } from './actions.js';
 import { FolderBrowser } from './workspace-grants-entry.js';
 import type { BotHarnessTranslate } from './locale.js';
 import { toolApprovalText } from './approval-text.js';
+import {
+  formatTokensPerSecond,
+  messagePerfSteps,
+  messageTokensPerSecond,
+  messageTtftMs,
+} from './message-perf.js';
 import { store, type BotSummary, type ChannelMessage } from './store.js';
 import { useMountedResource } from './mounted-resource.js';
 
@@ -312,6 +318,22 @@ function leadingBotMentions(message: ChannelMessage):
   return { mentions, text: message.body.slice(cursor) };
 }
 
+function messagePerfText(
+  message: ChannelMessage,
+  t: BotHarnessTranslate,
+): { tps: string; ttftSeconds: string | null; steps: string | null } | undefined {
+  const tps = messageTokensPerSecond(message);
+  if (tps === null) return undefined;
+  const ttft = messageTtftMs(message);
+  const steps = messagePerfSteps(message);
+  return {
+    tps: t('message.perf.tps', { tps: formatTokensPerSecond(tps) }),
+    ttftSeconds:
+      ttft === null ? null : t('message.perf.ttft', { seconds: Math.round(ttft / 100) / 10 }),
+    steps: steps === null ? null : t('message.perf.steps', { count: steps }),
+  };
+}
+
 export function ChannelMessageBody({
   message: storedMessage,
   channelId,
@@ -356,6 +378,7 @@ export function ChannelMessageBody({
   const message =
     approvalBody === undefined ? storedMessage : { ...storedMessage, body: approvalBody };
   const humanMarkdown = rendersHumanMarkdown(message);
+  const messagePerf = useMemo(() => messagePerfText(message, t), [message, t]);
   const format =
     message.format ?? (message.author.kind === 'human' && !humanMarkdown ? 'text' : 'markdown');
   if (message.contentPurged) return <div className="bh-bubble-body">{t('purge.purged')}</div>;
@@ -670,6 +693,13 @@ export function ChannelMessageBody({
               t={t}
             />
           ))}
+        </div>
+      ) : null}
+      {messagePerf !== undefined ? (
+        <div className="bh-message-perf" data-message-perf="">
+          {messagePerf.tps}
+          {messagePerf.ttftSeconds === null ? null : ` · ${messagePerf.ttftSeconds}`}
+          {messagePerf.steps === null ? null : ` · ${messagePerf.steps}`}
         </div>
       ) : null}
     </div>

@@ -78,6 +78,7 @@ import {
   type BotMessageCausation,
   type ChannelMention,
   type ChannelMessage,
+  type ChannelMessagePerf,
   type ChannelReaction,
   type ChannelRecord,
 } from '../channels/channel.js';
@@ -500,6 +501,7 @@ export interface OrchestratorChannelAccess {
     body: string;
     replyTo?: string;
     deliveryKey?: string;
+    perf?: ChannelMessagePerf;
   }): Promise<{ channelId: string; message: ChannelMessage }>;
   send(input: {
     body: string;
@@ -509,6 +511,7 @@ export interface OrchestratorChannelAccess {
     mentionBotIds?: string[];
     mentionHumanIds?: string[];
     deliveryKey?: string;
+    perf?: ChannelMessagePerf;
   }): Promise<ChannelMessage>;
 }
 
@@ -5419,6 +5422,7 @@ class BotRuntimeImplementation implements BotRuntime {
           body: input.body,
           replyTo: input.replyTo,
           deliveryKey: input.deliveryKey,
+          ...(input.perf === undefined ? {} : { perf: input.perf }),
         });
       },
       ignore: ({ channelId, messageId }) => {
@@ -5745,6 +5749,7 @@ class BotRuntimeImplementation implements BotRuntime {
             replyTo: input.replyTo,
             attachments: input.attachments,
             deliveryKey: input.deliveryKey,
+            ...(input.perf === undefined ? {} : { perf: input.perf }),
           });
           return sent.message;
         }
@@ -5763,6 +5768,7 @@ class BotRuntimeImplementation implements BotRuntime {
             mentionBotIds: input.mentionBotIds,
             mentionHumanIds: input.mentionHumanIds,
             deliveryKey: input.deliveryKey,
+            ...(input.perf === undefined ? {} : { perf: input.perf }),
           });
         }
         const body = input.body;
@@ -5780,6 +5786,7 @@ class BotRuntimeImplementation implements BotRuntime {
           body,
           ...(input.attachments === undefined ? {} : { attachments: input.attachments }),
           ...(input.replyTo === undefined ? {} : { replyTo: input.replyTo }),
+          ...(input.perf === undefined ? {} : { perf: input.perf }),
         };
         const appended = await this.#channels.appendMessage(channel.id, message, {
           sessionId,
@@ -5805,6 +5812,7 @@ class BotRuntimeImplementation implements BotRuntime {
     mentionBotIds?: string[] | undefined;
     mentionHumanIds?: string[] | undefined;
     deliveryKey?: string | undefined;
+    perf?: ChannelMessagePerf | undefined;
   }): Promise<ChannelMessage> {
     const { botSlug, channel } = input;
     if (channel.type !== 'group' || !this.#isMember(botSlug, channel))
@@ -5886,6 +5894,7 @@ class BotRuntimeImplementation implements BotRuntime {
       ...(humanMentions.length === 0 ? {} : { humanMentions }),
       ...(input.replyTo === undefined ? {} : { replyTo: input.replyTo }),
       ...(input.attachments === undefined ? {} : { attachments: input.attachments }),
+      ...(input.perf === undefined ? {} : { perf: input.perf }),
     };
     input.beforeSend();
     const result = await this.#channels.appendMessageOnce(channel.id, message, undefined, {
@@ -6003,6 +6012,7 @@ class BotRuntimeImplementation implements BotRuntime {
     replyTo?: string | undefined;
     attachments?: ChannelAttachmentRef[] | undefined;
     deliveryKey?: string | undefined;
+    perf?: ChannelMessagePerf | undefined;
   }): Promise<{ channelId: string; message: ChannelMessage }> {
     const { botSlug, recipientBotSlug, channel } = input;
     if (
@@ -6037,6 +6047,7 @@ class BotRuntimeImplementation implements BotRuntime {
       botCausation,
       ...(input.replyTo === undefined ? {} : { replyTo: input.replyTo }),
       ...(input.attachments === undefined ? {} : { attachments: input.attachments }),
+      ...(input.perf === undefined ? {} : { perf: input.perf }),
     };
     input.beforeSend();
     const result = await this.#channels.appendMessageOnce(channel.id, message, undefined, {

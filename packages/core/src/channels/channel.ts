@@ -351,6 +351,17 @@ export interface ChannelMessage {
   replyTo?: string;
 
   replyToPreview?: ChannelReplyPreview | null;
+
+  perf?: ChannelMessagePerf;
+}
+
+export interface ChannelMessagePerf {
+  sessionId: string;
+  turn: number;
+  outputTokens: number;
+  decodeMs: number;
+  ttftMs: number | null;
+  steps: number;
 }
 
 export const MAX_BOT_HOPS = 8;

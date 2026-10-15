@@ -3584,6 +3584,12 @@ a.bh-message-file-download:hover, button.bh-message-file-download:hover { backgr
 .bh-bubble-toolbar:has([aria-expanded='true']) {
   opacity: 1;
 }
+.bh-message-perf {
+  display: block;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: ${text.metaSize};
+  margin-top: ${space.x1};
+}
 .bh-bubble-actions {
   display: flex;
   align-items: center;

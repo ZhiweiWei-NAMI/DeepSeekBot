@@ -16,7 +16,7 @@ export interface FakeSession {
   id: string;
   header: { cwd?: string; createdAt: number };
   seq: number;
-  append(type: string, data: unknown): void;
+  append(type: string, data: unknown, time?: number): void;
   snapshotEvents(
     fromSeq?: number,
     toSeqExclusive?: number,
@@ -123,12 +123,12 @@ export class FakeAgentHost implements DshAgentHost {
       get seq() {
         return events.length;
       },
-      append: (type, data) =>
+      append: (type, data, time) =>
         this.#emit(session, events, {
           type,
           data,
           seq: events.length,
-          time: session.header.createdAt,
+          time: time ?? session.header.createdAt,
         }),
       snapshotEvents: (fromSeq = 0, toSeqExclusive = events.length) =>
         events.slice(fromSeq, toSeqExclusive),

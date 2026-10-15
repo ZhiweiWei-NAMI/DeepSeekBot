@@ -194,6 +194,7 @@ import {
 import { ActivityToolDetails, createToolDetailIndex } from './state/tool-details.js';
 import { createDshActivityProjection } from './state/dsh-activity.js';
 import { readPublicToolDetail } from './state/tool-activity.js';
+import { createMessagePerfTracker, type MessagePerfTracker } from './usage/message-perf.js';
 import { createUsageProjection, type UsageProjection } from './usage/usage.js';
 import { installBotSubagentModelTools } from './runtime/subagent-model-tools.js';
 
@@ -1003,6 +1004,7 @@ export function apply(ctx: Context, config: BotHarnessConfig): void {
   const privateExecution = new ProtectedExecution((phase, details = {}) =>
     ctx.logger.info('private-input %j', { phase, ...details }),
   );
+  const messagePerf: MessagePerfTracker = createMessagePerfTracker();
   const agentAdapter = createDshBotAgentAdapter({
     agents: ctx.agents,
     defaultModel,
@@ -1023,6 +1025,7 @@ export function apply(ctx: Context, config: BotHarnessConfig): void {
     defaultAgentPreset: config.agentPreset ?? DEFAULT_AGENT_PRESET,
     resolveAgentPresets: () => ctx.get('agentPresets') as DshAgentPresetHost | undefined,
     publishDraft: (event) => publishDraft(event),
+    messagePerf,
     onAgentSetup: (agentCtx, agent, info) => core.runBotAgentSetups(agentCtx, agent, info),
     onOrchestratorFileSetup: (agentCtx, agent) =>
       installOrchestratorFileTools(
@@ -2150,6 +2153,9 @@ export function apply(ctx: Context, config: BotHarnessConfig): void {
         ctx.logger.warn('approval-result-publication-failed');
       }
       core.usage?.handleSessionEvent(session.id, event);
+      // The fold runs synchronously with the append, so a `channel_send` tool
+      // executed later in the same step already sees this step's settlement.
+      messagePerf.handleSessionEvent(session.id, event);
       handleCompactionEvent(
         {
           ownership: core.ownership,
@@ -2190,6 +2196,7 @@ export function apply(ctx: Context, config: BotHarnessConfig): void {
     ({ agent }) => {
       userQuestions.cancelSession(agent.session.id);
       activity.handleSessionDisposed(agent.session.id);
+      messagePerf.clear(agent.session.id);
     },
     { global: true },
   );
