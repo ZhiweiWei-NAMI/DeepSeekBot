@@ -1717,10 +1717,6 @@ export function apply(ctx: Context, config: BotHarnessConfig): void {
 
   const dshSessions = (ctx as unknown as { sessions: DshSessionStore }).sessions;
 
-  // Subagent dispatch visibility: project real Host observations (the
-  // dispatching tool call, the child Session or background Job it created, and
-  // that child's or Job's terminal outcome) onto the dispatching Channel as one
-  // live card, reusing the existing Channel journal and live stream.
   const subagentDispatchProjection = createSubagentDispatchProjection({
     registry: core.subagentDispatches,
     channelForSession: (sessionId) => core.runtime.askChannel?.(sessionId),
@@ -1737,9 +1733,7 @@ export function apply(ctx: Context, config: BotHarnessConfig): void {
     publish: (record) => core.live.publishSubagentDispatch(record),
     warn: (message) => ctx.logger.warn(message),
   });
-  // Job events are consumed for the owners this composition runs, so a
-  // background delegation's registration and settlement stay observable after
-  // the dispatching turn's Agent is disposed.
+
   ctx.inject(['jobs'], (jobCtx) => {
     jobCtx.effect(() => {
       const jobs = jobCtx.get('jobs') as SubagentDispatchJobs | undefined;
@@ -1748,14 +1742,10 @@ export function apply(ctx: Context, config: BotHarnessConfig): void {
       );
     }, 'botharness: subagent dispatch jobs');
   });
-  // The Host's paired terminal for one one-shot run or one continuable
-  // activation. Registered globally because a delegation outlives the
-  // dispatching turn's Agent; the projection only acts on children it bound.
-  ctx.on(
-    'subagent/end',
-    (info) => subagentDispatchProjection.handleSubagentEnd(info),
-    { global: true },
-  );
+
+  ctx.on('subagent/end', (info) => subagentDispatchProjection.handleSubagentEnd(info), {
+    global: true,
+  });
 
   const developerModeTarget: { gate?: DeveloperModeSkillGate } = {};
   const releaseInstaller: { current: ReleaseInstaller | undefined } = { current: undefined };
@@ -2224,11 +2214,7 @@ export function apply(ctx: Context, config: BotHarnessConfig): void {
       const owner = core.ownership.resolve(agent.session.id);
       const parentSessionId = agent.session.header.parentSession;
       if (parentSessionId !== undefined)
-        subagentDispatchProjection.bindChild(
-          agent.session.id,
-          parentSessionId,
-          owner?.provenance,
-        );
+        subagentDispatchProjection.bindChild(agent.session.id, parentSessionId, owner?.provenance);
       if (owner !== undefined) {
         installBotSubagentModelTools(
           agent.ctx,

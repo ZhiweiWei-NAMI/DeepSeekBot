@@ -1,63 +1,24 @@
-/**
- * Subagent dispatch visibility: the bounded projection of one delegated
- * `bot_subagent` / `bot_subagent_fork` call, rendered on a Channel as a live
- * card.
- *
- * A dispatch is identified by the Host tool-call id, which the Host assigns
- * before the tool body runs and therefore before any route is resolved — so a
- * refused delegation has an identity without ever having a run. The projection
- * only ever records facts the Host published: an accepted child session or
- * registered background Job (`queued`), the child's first executing turn
- * (`running`), and the child's or Job's terminal outcome
- * (`completed` / `failed` / `declined`). When no reliable terminal fact
- * arrives the projection stays where it was; it is never advanced to
- * `completed` on a guess.
- *
- * This module is deliberately dependency-free and side-effect-free: it owns the
- * vocabulary, the sanitizer, and the revision/ordering rules, so the same
- * reducer is exercised by unit tests and by the runtime wiring that feeds it.
- */
-
 export const SUBAGENT_DISPATCH_KIND = 'subagent';
 
-/** Longest delegation description retained in a projection, in characters. */
 export const SUBAGENT_DISPATCH_DESCRIPTION_MAX_CHARS = 120;
 
-/** Longest dispatch identity accepted from the Host, in characters. */
 export const SUBAGENT_DISPATCH_ID_MAX_CHARS = 200;
 
-/** Live dispatch records retained per Channel, oldest terminal records evicted first. */
 export const SUBAGENT_DISPATCH_MAX_PER_CHANNEL = 64;
 
 export type SubagentDispatchStatus = 'queued' | 'running' | 'completed' | 'failed' | 'declined';
 
-/**
- * Why a dispatch is not `completed`. Codes are a closed, Host-independent
- * vocabulary: raw Host error text, stack, reason, and output never reach a
- * projection.
- */
 export type SubagentDispatchReasonCode =
-  /** The delegation never started: the tool call failed or was refused. */
   | 'refused'
-  /** The delegation never started: cancellation won before any child existed. */
   | 'aborted'
-  /** The child or Job was cancelled after starting. */
   | 'killed'
-  /** The child hit its token ceiling. */
   | 'max-tokens'
-  /** The child's model declined the task. */
   | 'refusal'
-  /** Route selection refused the requested/child model. */
   | 'route-not-allowed'
-  /** The provider credential is missing or invalid. */
   | 'credential'
-  /** The provider adapter is unavailable for the resolved route. */
   | 'provider-unavailable'
-  /** No Model Preset is applied, so an explicit model choice is refused. */
   | 'no-plan'
-  /** The turn or Job ended without a recognized terminal kind. */
   | 'unfinished'
-  /** Model or transport failure. */
   | 'error';
 
 export interface SubagentDispatchRoute {
@@ -66,32 +27,28 @@ export interface SubagentDispatchRoute {
   reasoningEffort?: string;
 }
 
-/** One dispatch's latest observable state. */
 export interface SubagentDispatchProjection {
-  /** Host tool-call id of the delegating call, assigned before routing. */
   dispatchId: string;
   kind: typeof SUBAGENT_DISPATCH_KIND;
-  /** Bounded, control-character-free summary of the delegation `description`. */
+
   description: string;
   status: SubagentDispatchStatus;
-  /** Monotonic per dispatch; a consumer drops any update at or below it. */
+
   revision: number;
   updatedAt: string;
-  /** The PersonaBot session that delegated. */
+
   parentSessionId: string;
-  /** Present only after a real start published the child's durable route. */
+
   resolvedRoute?: SubagentDispatchRoute;
   reasonCode?: SubagentDispatchReasonCode;
 }
 
-/** One live projection and the Channel message that carries it. */
 export interface SubagentDispatchRecord {
   channelId: string;
   messageId: string;
   projection: SubagentDispatchProjection;
 }
 
-/** One observed transition to apply. */
 export interface SubagentDispatchTransition {
   channelId: string;
   dispatchId: string;
@@ -104,14 +61,9 @@ export interface SubagentDispatchTransition {
 }
 
 export interface SubagentDispatchRegistry {
-  /**
-   * Apply one transition.
-   * @returns the published record, or `undefined` when the transition was
-   *   stale (an older status), a duplicate, or arrived after a terminal state.
-   */
   apply(transition: SubagentDispatchTransition): SubagentDispatchRecord | undefined;
   get(channelId: string, dispatchId: string): SubagentDispatchProjection | undefined;
-  /** Live records for one Channel, oldest first. */
+
   forChannel(channelId: string): readonly SubagentDispatchRecord[];
   forget(channelId: string, dispatchId: string): boolean;
   forgetChannel(channelId: string): void;
@@ -141,12 +93,10 @@ const REASON_CODES: readonly SubagentDispatchReasonCode[] = [
   'error',
 ];
 
-/** Terminal statuses are final: no later transition may reopen them. */
 export function isTerminalSubagentDispatchStatus(status: SubagentDispatchStatus): boolean {
   return STATUS_RANK[status] === 2;
 }
 
-/** Relative progress of a status; a lower rank never overwrites a higher one. */
 export function subagentDispatchStatusRank(status: SubagentDispatchStatus): number {
   return STATUS_RANK[status];
 }
@@ -155,15 +105,12 @@ export function isSubagentDispatchStatus(value: unknown): value is SubagentDispa
   return typeof value === 'string' && Object.hasOwn(STATUS_RANK, value);
 }
 
-export function isSubagentDispatchReasonCode(
-  value: unknown,
-): value is SubagentDispatchReasonCode {
+export function isSubagentDispatchReasonCode(value: unknown): value is SubagentDispatchReasonCode {
   return typeof value === 'string' && (REASON_CODES as readonly string[]).includes(value);
 }
 
-/** One unsafe code point: control, format, or line/paragraph separator. */
 const UNSAFE_CHAR = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
-/** The same class for removal; global, so every occurrence is stripped. */
+
 const UNSAFE_CHARS = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
 
 function safeText(value: string): string {
@@ -174,14 +121,6 @@ function isSafeToken(value: string): boolean {
   return value.length > 0 && value.length <= 80 && /^[A-Za-z0-9_.:/-]+$/u.test(value);
 }
 
-/**
- * Reduce a model-authored delegation `description` to a bounded summary.
- *
- * Whitespace collapses, control/format/separator characters are removed, and
- * the result is truncated. The raw arguments, prompt, child output, and stack
- * are never part of a projection, so this is the only free text a dispatch card
- * can carry.
- */
 export function sanitizeSubagentDispatchDescription(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const normalized = safeText(value);
@@ -192,7 +131,6 @@ export function sanitizeSubagentDispatchDescription(value: unknown): string | un
     : normalized;
 }
 
-/** Validate one identity (dispatch, channel, session) for retention. */
 export function isSubagentDispatchIdentity(value: unknown): value is string {
   return (
     typeof value === 'string' &&
@@ -202,10 +140,6 @@ export function isSubagentDispatchIdentity(value: unknown): value is string {
   );
 }
 
-/**
- * Accept a resolved route only when every field is a bounded token, so a Host
- * value cannot smuggle free text into the projection.
- */
 export function sanitizeSubagentDispatchRoute(value: unknown): SubagentDispatchRoute | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
   const route = value as Record<string, unknown>;
@@ -245,12 +179,6 @@ function fnv1a(value: string): string {
   return hash.toString(16).padStart(8, '0');
 }
 
-/**
- * The Channel message id that carries one dispatch card.
- *
- * The id is derived from the dispatch identity so history, live updates, and a
- * reconnect all address the same message without a second binding handshake.
- */
 export function subagentDispatchMessageId(dispatchId: string): string {
   const safe = isSubagentDispatchIdentity(dispatchId) ? dispatchId : String(dispatchId);
   const token = safe.replace(/[^A-Za-z0-9_-]+/gu, '-').slice(0, 64);
@@ -258,10 +186,6 @@ export function subagentDispatchMessageId(dispatchId: string): string {
   return `subagent-dispatch-${token.length === 0 ? 'x' : token}-${suffix}`;
 }
 
-/**
- * Validate one stored projection (journal read path). A `declined` projection
- * never carries `resolvedRoute`: a delegation that never started has no route.
- */
 export function isSubagentDispatchProjection(value: unknown): value is SubagentDispatchProjection {
   if (typeof value !== 'object' || value === null) return false;
   const projection = value as Record<string, unknown>;
@@ -280,18 +204,13 @@ export function isSubagentDispatchProjection(value: unknown): value is SubagentD
   const route = projection['resolvedRoute'];
   if (projection['status'] === 'declined') {
     if (route !== undefined) return false;
-  } else if (route !== undefined && sanitizeSubagentDispatchRoute(route) === undefined) return false;
+  } else if (route !== undefined && sanitizeSubagentDispatchRoute(route) === undefined)
+    return false;
   const reasonCode = projection['reasonCode'];
   if (reasonCode !== undefined && !isSubagentDispatchReasonCode(reasonCode)) return false;
   return true;
 }
 
-/**
- * Map the Host's child stop-reason vocabulary onto the projection vocabulary.
- *
- * Accepts both Host shapes: a child `turn/end` reason (`{ kind, ... }`) and the
- * `subagent/end` lifecycle payload's bare `stopReason` string.
- */
 export function mapSubagentStopReason(reason: unknown): {
   status: SubagentDispatchStatus;
   reasonCode?: SubagentDispatchReasonCode;
@@ -310,8 +229,8 @@ export function mapSubagentStopReason(reason: unknown): {
   return { status: 'failed', reasonCode: 'unfinished' };
 }
 
-/** Map a Host route/transport failure code onto a bounded reason code. */
-export function mapSubagentFailureCode(code: unknown): SubagentDispatchReasonCode {  switch (code) {
+export function mapSubagentFailureCode(code: unknown): SubagentDispatchReasonCode {
+  switch (code) {
     case 'MISSING_CREDENTIAL':
     case 'INVALID_CREDENTIAL':
       return 'credential';
@@ -325,11 +244,6 @@ export function mapSubagentFailureCode(code: unknown): SubagentDispatchReasonCod
   }
 }
 
-/**
- * Map one child Session `turn/end` reason (`{ kind }`, with a structured
- * `error.code` when the turn failed) onto the projection vocabulary. Only the
- * mapped code survives; the Host's error message and stack never do.
- */
 export function mapSubagentTurnEndReason(reason: unknown): {
   status: SubagentDispatchStatus;
   reasonCode?: SubagentDispatchReasonCode;
@@ -337,16 +251,13 @@ export function mapSubagentTurnEndReason(reason: unknown): {
   const mapped = mapSubagentStopReason(reason);
   if (mapped.reasonCode !== 'error') return mapped;
   const record =
-    typeof reason === 'object' && reason !== null
-      ? (reason as Record<string, unknown>)
-      : undefined;
+    typeof reason === 'object' && reason !== null ? (reason as Record<string, unknown>) : undefined;
   const raw = record?.['error'];
   const error =
     typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : undefined;
   return { status: 'failed', reasonCode: mapSubagentFailureCode(error?.['code']) };
 }
 
-/** Map a background Job's terminal status onto the projection vocabulary. */
 export function mapSubagentJobStatus(status: unknown): {
   status: SubagentDispatchStatus;
   reasonCode?: SubagentDispatchReasonCode;
@@ -386,8 +297,7 @@ export function createSubagentDispatchRegistry(): SubagentDispatchRegistry {
       const description = sanitizeSubagentDispatchDescription(transition.description);
       const route =
         status === 'declined' ? undefined : sanitizeSubagentDispatchRoute(transition.resolvedRoute);
-      const updatedAt =
-        typeof at === 'string' && at.length > 0 ? at : new Date(0).toISOString();
+      const updatedAt = typeof at === 'string' && at.length > 0 ? at : new Date(0).toISOString();
 
       let group = channels.get(channelId);
       if (group === undefined) {
@@ -401,7 +311,8 @@ export function createSubagentDispatchRegistry(): SubagentDispatchRegistry {
         if (subagentDispatchStatusRank(status) < subagentDispatchStatusRank(previous.status))
           return undefined;
         const nextRoute = route ?? previous.resolvedRoute;
-        const nextDescription = previous.description.length > 0 ? previous.description : description;
+        const nextDescription =
+          previous.description.length > 0 ? previous.description : description;
         if (
           status === previous.status &&
           routeEquals(route, previous.resolvedRoute) &&

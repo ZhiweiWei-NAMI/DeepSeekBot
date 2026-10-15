@@ -80,7 +80,7 @@ describe('dispatch history and live integration (offline)', () => {
       at: dispatchFixture.updatedAt,
     };
     const initial = registry.apply({ ...transition, status: 'running' })!;
-    // Synthetic descriptor refinements produce real registry revisions 2–4.
+
     for (const reasoningEffort of [undefined, 'low', 'high']) {
       registry.apply({
         ...transition,
@@ -127,8 +127,7 @@ describe('dispatch history and live integration (offline)', () => {
         });
         expect(store.getSnapshot().conversation.messages).toHaveLength(1);
         expect(store.getSnapshot().conversation.revision).toBe(1);
-        // Replayed older history and even a higher-revision nonterminal baseline
-        // cannot undo an observed terminal fact.
+
         store.setConversation({ messages: [history] });
         source.emit(frame.event, {
           ...payload,

@@ -26,7 +26,6 @@ function channel(id: string): ChannelRecord {
   };
 }
 
-/** The slice of ChannelStore the live hub reads; the real store is exercised elsewhere. */
 function store(channelIds: readonly string[]): ChannelStore {
   const records = new Map(channelIds.map((id) => [id, channel(id)]));
   return {
@@ -87,7 +86,9 @@ describe('subagent dispatch live stream', () => {
     }
     controller.abort();
 
-    const baseline = frames.find((frame) => frame.event === CHANNEL_SUBAGENT_DISPATCH_BASELINE_EVENT);
+    const baseline = frames.find(
+      (frame) => frame.event === CHANNEL_SUBAGENT_DISPATCH_BASELINE_EVENT,
+    );
     expect(baseline).toBeDefined();
     const payload = JSON.parse(baseline!.data) as {
       channelId: string;
@@ -139,9 +140,9 @@ describe('subagent dispatch live stream', () => {
       messageId: 'subagent-dispatch-call-1-b93e8f47',
       subagentDispatch: { status: 'completed', revision: 2 },
     });
-    expect(parseLiveFrame(`event: ${CHANNEL_SUBAGENT_DISPATCH_EVENT}\ndata: ${update!.data}`)).toEqual(
-      update,
-    );
+    expect(
+      parseLiveFrame(`event: ${CHANNEL_SUBAGENT_DISPATCH_EVENT}\ndata: ${update!.data}`),
+    ).toEqual(update);
   });
 
   it('never leaks one Channel dispatch state into another Channel stream', async () => {
@@ -160,12 +161,11 @@ describe('subagent dispatch live stream', () => {
       new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 150));
 
     expect((await frames.next()).value).toMatchObject({ event: 'open' });
-    // The drafts baseline is always delivered; no dispatch frame precedes it.
+
     const baseline = await frames.next();
     expect(baseline.value).toMatchObject({ event: CHANNEL_DRAFT_BASELINE_EVENT });
     expect(await Promise.race([frames.next(), timeout()])).toBe('timeout');
 
-    // A publish addressed at the other Channel reaches no dm-beta subscriber.
     hub.publishSubagentDispatch(record);
     expect(await Promise.race([frames.next(), timeout()])).toBe('timeout');
 

@@ -4,10 +4,7 @@ import { isChannelNotice } from './channel-notice.js';
 import type { ChannelDraft, ChannelDraftEvent } from './draft.js';
 import type { ChannelMessage, ChannelReaction } from './channel.js';
 import type { ChannelMessageCommit, ChannelStore } from './store.js';
-import type {
-  SubagentDispatchProjection,
-  SubagentDispatchRecord,
-} from './subagent-dispatch.js';
+import type { SubagentDispatchProjection, SubagentDispatchRecord } from './subagent-dispatch.js';
 import { MAX_MESSAGE_PAGE, type ChannelJournalPage } from './timeline.js';
 
 export const CHANNEL_STREAM_PATH = '/api/botharness/stream';
@@ -96,7 +93,6 @@ export type ChannelLiveNotification =
       subagentDispatch: SubagentDispatchProjection;
     }
   | {
-      /** Latest live dispatch state, replayed on every (re)subscribe. */
       kind: 'subagent-dispatch-baseline';
       channelId: string;
       dispatches: { messageId: string; subagentDispatch: SubagentDispatchProjection }[];
@@ -200,7 +196,6 @@ interface ActivitySource {
   onChange(listener: () => void): () => void;
 }
 
-/** Latest live subagent dispatch records, read per Channel for reconnect baselines. */
 export interface ChannelSubagentDispatchSource {
   forChannel(channelId: string): readonly SubagentDispatchRecord[];
 }

@@ -1,6 +1,5 @@
 import type { SubagentDispatch } from '../../src/client/subagent-dispatch.js';
 
-// Synthetic public values only. These snapshots are NOT evidence of running jobs.
 export const dispatchFixture: SubagentDispatch = {
   dispatchId: 'fixture-dispatch',
   kind: 'subagent',

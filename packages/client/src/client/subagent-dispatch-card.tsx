@@ -43,7 +43,6 @@ const styles = stylex.create({
   declined: { color: color.warning },
 });
 
-/** Render the Host v1 projection; no inferred lifecycle or Assignment defaults. */
 export function SubagentDispatchCard({
   dispatch,
   t,

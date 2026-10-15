@@ -9,7 +9,6 @@ import type { ChannelMessage } from './store.js';
 
 export type SubagentDispatch = SubagentDispatchProjection;
 
-/** Copy the Host v1 public allowlist, never prompt, args, output or raw errors. */
 export function parseSubagentDispatch(value: unknown): SubagentDispatch | undefined {
   if (!isSubagentDispatchProjection(value)) return undefined;
   const resolvedRoute = sanitizeSubagentDispatchRoute(value.resolvedRoute);
@@ -28,7 +27,6 @@ export function parseSubagentDispatch(value: unknown): SubagentDispatch | undefi
   };
 }
 
-/** An immutable terminal fact and an older revision cannot be overwritten. */
 export function newerSubagentDispatch(
   previous: SubagentDispatch | undefined,
   next: SubagentDispatch,
@@ -45,7 +43,6 @@ export function newerSubagentDispatch(
   return next;
 }
 
-/** Keep live revisions when an older history request finishes later. */
 export function preserveSubagentDispatches(
   previous: readonly ChannelMessage[],
   next: readonly ChannelMessage[],
@@ -69,7 +66,6 @@ export function preserveSubagentDispatches(
   });
 }
 
-/** Overlay only existing system anchors. Never create cards from an absent event. */
 export function overlaySubagentDispatches(
   messages: readonly ChannelMessage[],
   dispatches: ReadonlyMap<string, SubagentDispatch>,

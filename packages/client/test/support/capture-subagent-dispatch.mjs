@@ -1,4 +1,3 @@
-// Captures the actual React component, not a drawing or a full DSH instance.
 import assert from 'node:assert/strict';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -47,7 +46,7 @@ try {
   });
   const errors = [];
   page.on('pageerror', (error) => errors.push(String(error)));
-  // Fixture-only palette supplies DSH token values without shell/avatar dependencies.
+
   await page.setContent(`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><style>
     :root{color-scheme:light;--dsw-alias-bg-base:#f5f5f5;--dsw-alias-bg-module-platform:#fff;--dsw-alias-label-primary:#202124;--dsw-alias-label-secondary:#62666d;--dsw-alias-state-business-primary:#245dce;--dsw-alias-state-success-primary:#15723e;--dsw-alias-state-error-primary:#ba2535;--dsw-alias-state-warn-primary:#8c5c00;--dsw-radius-md:12px}
     :root[data-theme="dark"]{color-scheme:dark;--dsw-alias-bg-base:#18191b;--dsw-alias-bg-module-platform:#242629;--dsw-alias-label-primary:#eceef1;--dsw-alias-label-secondary:#a9afb8;--dsw-alias-state-business-primary:#8cb2ff;--dsw-alias-state-success-primary:#6ed599;--dsw-alias-state-error-primary:#ff8995;--dsw-alias-state-warn-primary:#e3bd69}

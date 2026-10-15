@@ -1,4 +1,3 @@
-// Offline fixture tooling only; never used by the production bundle.
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,8 +25,6 @@ export const aliases = {
   '@stylexjs/stylex': stylexTools.resolve('@stylexjs/stylex'),
 };
 
-// Same StyleX settings as scripts/stylex-plugin.mjs; only dependency resolution
-// is isolated so this component test needs no full application installation.
 export function stylexCompiler() {
   const { transformAsync } = stylexTools('@babel/core');
   const stylexBabel = stylexTools('@stylexjs/babel-plugin');

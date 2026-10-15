@@ -323,11 +323,6 @@ export interface ChannelMessage {
 
   sessionFailure?: SessionFailureCard;
 
-  /**
-   * Latest observable state of the subagent delegation this card message
-   * reports. Updated through the Channel live stream; the committed message
-   * keeps the state it was committed with.
-   */
   subagentDispatch?: SubagentDispatchProjection;
 
   toolApprovalDecision?: ToolApprovalDecision;

@@ -107,7 +107,11 @@ describe('DM conversation', () => {
         subagentDispatch: { status: 'completed' },
       },
     });
-    channel.append({ id: 'after-dispatch', body: 'next reply', author: { kind: 'bot', slug: SLUG } });
+    channel.append({
+      id: 'after-dispatch',
+      body: 'next reply',
+      author: { kind: 'bot', slug: SLUG },
+    });
     const next = await until(target, (snapshot) => snapshot.messages.length === 3);
     expect(next.status).toBe('live');
     expect(ids(next)).toEqual(['human-1', 'bot-2', 'after-dispatch']);
