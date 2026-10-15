@@ -549,6 +549,7 @@ describe('plugin entry', () => {
       'botApprovalTemplateSet',
       'approvalReviewerModel',
       'approvalReviewerModelSet',
+      'subagentAdvisorSet',
       'standingLimitsSet',
       'botAvatarSet',
       'botAppearanceSet',
