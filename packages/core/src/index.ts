@@ -70,6 +70,30 @@ export type {
   ChannelType,
 } from './channels/channel.js';
 export { createChannelStore, DEFAULT_MESSAGE_PAGE, MAX_MESSAGE_PAGE } from './channels/store.js';
+export {
+  createSubagentDispatchRegistry,
+  isSubagentDispatchProjection,
+  isSubagentDispatchStatus,
+  isTerminalSubagentDispatchStatus,
+  mapSubagentJobStatus,
+  mapSubagentTurnEndReason,
+  sanitizeSubagentDispatchDescription,
+  subagentDispatchMessageId,
+  SUBAGENT_DISPATCH_KIND,
+} from './channels/subagent-dispatch.js';
+export type {
+  SubagentDispatchProjection,
+  SubagentDispatchReasonCode,
+  SubagentDispatchRecord,
+  SubagentDispatchRegistry,
+  SubagentDispatchRoute,
+  SubagentDispatchStatus,
+} from './channels/subagent-dispatch.js';
+export { createSubagentDispatchProjection } from './runtime/subagent-dispatch-projection.js';
+export type {
+  SubagentDispatchProjectionHost,
+  SubagentDispatchProjectionOptions,
+} from './runtime/subagent-dispatch-projection.js';
 export type {
   ChannelMessageQueryOptions,
   ChannelMessageQueryPage,

@@ -11,6 +11,16 @@ import {
   type JournalPage,
 } from './bridge.js';
 import type { BridgeActions } from './actions.js';
+import {
+  parseSubagentDispatch,
+  newerSubagentDispatch,
+  overlaySubagentDispatches,
+  type SubagentDispatch,
+} from './subagent-dispatch.js';
+import {
+  subagentDispatchMessageId,
+  SUBAGENT_DISPATCH_MAX_PER_CHANNEL,
+} from '../../../core/src/channels/subagent-dispatch.js';
 import type { ChannelDraft, ClientStore } from './store.js';
 
 const EVENT_NAME = 'channel/message';
@@ -195,6 +205,14 @@ export function mountChannelLive(
   let activeAttempts = new Map<string, string>();
   let renderFrame: number | undefined;
   let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+  let dispatchChannelId: string | undefined;
+  const dispatches = new Map<string, SubagentDispatch>();
+  const renderDispatches = (): void => {
+    const conversation = store.getSnapshot().conversation;
+    if (conversation.channel?.id !== activeChannelId) return;
+    const messages = overlaySubagentDispatches(conversation.messages, dispatches);
+    if (messages !== conversation.messages) store.setConversation({ messages });
+  };
 
   const cancelRender = (): void => {
     if (renderFrame !== undefined) cancelAnimationFrame(renderFrame);
@@ -273,8 +291,15 @@ export function mountChannelLive(
       snapshot.mode === 'bot' && snapshot.conversation.status === 'ready'
         ? snapshot.conversation.channel
         : undefined;
-    if (channel?.id === activeChannelId) return;
+    if (channel?.id === activeChannelId) {
+      if (channel !== undefined) renderDispatches();
+      return;
+    }
     close();
+    if (channel?.id !== dispatchChannelId) {
+      dispatches.clear();
+      dispatchChannelId = channel?.id;
+    }
     if (channel === undefined) return;
     activeChannelId = channel.id;
     const query = new URLSearchParams({
@@ -321,6 +346,38 @@ export function mountChannelLive(
           ? latest.conversation.messages
           : [...latest.conversation.messages.filter((item) => item.id !== message.id), message],
       });
+    };
+    const onSubagentDispatch = (data: unknown, baseline = false): void => {
+      const payload = decode(data);
+      if (typeof payload !== 'object' || payload === null) return;
+      const frame = payload as Record<string, unknown>;
+      if (
+        frame.channelId !== activeChannelId ||
+        store.getSnapshot().conversation.channel?.id !== activeChannelId
+      )
+        return;
+      const entries = baseline ? frame.dispatches : [frame];
+      if (!Array.isArray(entries) || entries.length > SUBAGENT_DISPATCH_MAX_PER_CHANNEL) return;
+      for (const entry of entries) {
+        if (typeof entry !== 'object' || entry === null) continue;
+        const item = entry as Record<string, unknown>;
+        const projection = parseSubagentDispatch(item.subagentDispatch);
+        if (
+          projection === undefined ||
+          item.messageId !== subagentDispatchMessageId(projection.dispatchId)
+        )
+          continue;
+        const held =
+          dispatches.get(item.messageId) ??
+          store.getSnapshot().conversation.messages.find((message) => message.id === item.messageId)
+            ?.subagentDispatch;
+        const next = newerSubagentDispatch(held, projection);
+        if (next === held) continue;
+        if (!dispatches.has(item.messageId) && dispatches.size >= SUBAGENT_DISPATCH_MAX_PER_CHANNEL)
+          dispatches.delete(dispatches.keys().next().value!);
+        dispatches.set(item.messageId, next);
+      }
+      renderDispatches();
     };
     const onAdmission = (data: unknown): void => {
       const payload = decode(data);
@@ -516,6 +573,9 @@ export function mountChannelLive(
           if (item.kind === 'admission') onAdmission(notification);
           else if (item.kind === 'human-read') onHumanRead(notification);
           else if (item.kind === 'reaction') onReaction(notification);
+          else if (item.kind === 'subagent-dispatch') onSubagentDispatch(notification);
+          else if (item.kind === 'subagent-dispatch-baseline')
+            onSubagentDispatch(notification, true);
           else if (item.kind === 'draft-baseline') onDraftBaseline(notification);
           else if (item.kind === 'draft') onDraft(item.draft);
           else if (item.kind === 'draft-settled') onLifecycle(item.event, false);
@@ -565,6 +625,11 @@ export function mountChannelLive(
     next.addEventListener(ADMISSION_EVENT, data(onAdmission));
     next.addEventListener(HUMAN_READ_EVENT, data(onHumanRead));
     next.addEventListener(REACTION_EVENT, data(onReaction));
+    next.addEventListener('channel/subagent-dispatch', data(onSubagentDispatch));
+    next.addEventListener(
+      'channel/subagent-dispatch-baseline',
+      data((value) => onSubagentDispatch(value, true)),
+    );
     next.addEventListener(DRAFT_BASELINE_EVENT, data(onDraftBaseline));
     next.addEventListener(DRAFT_EVENT, data(onDraft));
     next.addEventListener(

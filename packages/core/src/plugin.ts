@@ -95,6 +95,15 @@ import { createModelRouteReadiness } from './models/readiness.js';
 import { createBotAvatarHttp, botAvatarUrl, BOT_AVATAR_PATH } from './bots/avatar-http.js';
 import { BOT_BANNER_PATH, createBotBannerHttp } from './bots/banner-http.js';
 import { createChannelLiveHub, CHANNEL_STREAM_PATH, type ChannelLiveHub } from './channels/live.js';
+import {
+  createSubagentDispatchRegistry,
+  type SubagentDispatchRegistry,
+} from './channels/subagent-dispatch.js';
+import {
+  createSubagentDispatchProjection,
+  subscribeSubagentJobs,
+  type SubagentDispatchJobs,
+} from './runtime/subagent-dispatch-projection.js';
 import type { ChannelDraftEvent } from './channels/draft.js';
 import { DeveloperModeSkillGate } from './logs/skill.js';
 import { openLogDatabase, type LogDatabase } from './logs/log-db.js';
@@ -317,6 +326,7 @@ export interface BotHarnessCore {
 
   usage?: UsageProjection;
   channels: ChannelStore;
+  subagentDispatches: SubagentDispatchRegistry;
   attachments: AttachmentStore;
   live: ChannelLiveHub;
   companions: CompanionFeed;
@@ -595,6 +605,7 @@ export function createCore(
       live?.publishReaction(channelId, messageId, reactions),
     ...(options.warn === undefined ? {} : { warn: options.warn }),
   });
+  const subagentDispatches = createSubagentDispatchRegistry();
   const attention = createBotAttentionQuery(
     attachOperationalModule(operationalDatabase, 'messaging'),
     channels,
@@ -658,6 +669,7 @@ export function createCore(
       onChange: (changed) => states.onActivity(() => changed()),
     },
     () => contentPurge.redactions(),
+    subagentDispatches,
   );
   if (operationalDatabase.mode === 'ready')
     for (const bot of registry.list())
@@ -893,6 +905,7 @@ export function createCore(
     toolRules,
     assignmentAccess,
     channels,
+    subagentDispatches,
     attention,
     inboxHistory,
     sourcePolicy,
@@ -1704,6 +1717,46 @@ export function apply(ctx: Context, config: BotHarnessConfig): void {
 
   const dshSessions = (ctx as unknown as { sessions: DshSessionStore }).sessions;
 
+  // Subagent dispatch visibility: project real Host observations (the
+  // dispatching tool call, the child Session or background Job it created, and
+  // that child's or Job's terminal outcome) onto the dispatching Channel as one
+  // live card, reusing the existing Channel journal and live stream.
+  const subagentDispatchProjection = createSubagentDispatchProjection({
+    registry: core.subagentDispatches,
+    channelForSession: (sessionId) => core.runtime.askChannel?.(sessionId),
+    commit: async (input) => {
+      await core.channels.appendMessage(input.channelId, {
+        id: input.messageId,
+        at: input.at,
+        author: { kind: 'system' },
+        body: input.body,
+        format: 'text',
+        subagentDispatch: input.projection,
+      });
+    },
+    publish: (record) => core.live.publishSubagentDispatch(record),
+    warn: (message) => ctx.logger.warn(message),
+  });
+  // Job events are consumed for the owners this composition runs, so a
+  // background delegation's registration and settlement stay observable after
+  // the dispatching turn's Agent is disposed.
+  ctx.inject(['jobs'], (jobCtx) => {
+    jobCtx.effect(() => {
+      const jobs = jobCtx.get('jobs') as SubagentDispatchJobs | undefined;
+      return subscribeSubagentJobs(jobs?.events, { owners: 'scope' }, (event) =>
+        subagentDispatchProjection.handleJobEvent(event),
+      );
+    }, 'botharness: subagent dispatch jobs');
+  });
+  // The Host's paired terminal for one one-shot run or one continuable
+  // activation. Registered globally because a delegation outlives the
+  // dispatching turn's Agent; the projection only acts on children it bound.
+  ctx.on(
+    'subagent/end',
+    (info) => subagentDispatchProjection.handleSubagentEnd(info),
+    { global: true },
+  );
+
   const developerModeTarget: { gate?: DeveloperModeSkillGate } = {};
   const releaseInstaller: { current: ReleaseInstaller | undefined } = { current: undefined };
   ctx.inject(['pluginManager'], (managerCtx) => {
@@ -2144,6 +2197,7 @@ export function apply(ctx: Context, config: BotHarnessConfig): void {
           .catch(() => ctx.logger.warn('user-question-reconciliation-failed'));
       });
       activity.handleSessionEvent(session.id, event);
+      subagentDispatchProjection.handleSessionEvent(session.id, event);
       try {
         core.externalMessaging.approvals.result(session.id, event);
       } catch {
@@ -2168,6 +2222,13 @@ export function apply(ctx: Context, config: BotHarnessConfig): void {
       activity.handleAgentCreated(agent.session);
       core.usage?.primeSession(agent.session.id, agent.session.snapshotEvents());
       const owner = core.ownership.resolve(agent.session.id);
+      const parentSessionId = agent.session.header.parentSession;
+      if (parentSessionId !== undefined)
+        subagentDispatchProjection.bindChild(
+          agent.session.id,
+          parentSessionId,
+          owner?.provenance,
+        );
       if (owner !== undefined) {
         installBotSubagentModelTools(
           agent.ctx,
@@ -2190,6 +2251,7 @@ export function apply(ctx: Context, config: BotHarnessConfig): void {
     ({ agent }) => {
       userQuestions.cancelSession(agent.session.id);
       activity.handleSessionDisposed(agent.session.id);
+      subagentDispatchProjection.handleSessionDisposed(agent.session.id);
     },
     { global: true },
   );

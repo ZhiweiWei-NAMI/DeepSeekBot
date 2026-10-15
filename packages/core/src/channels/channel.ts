@@ -5,6 +5,10 @@ import { isChannelAttachmentRef, type ChannelAttachmentRef } from '../attachment
 import type { ToolApprovalDecision, ToolApprovalRequestCard } from '../workspaces/tool-approval.js';
 import type { ChannelQuestionRequest, ChannelQuestionResolution } from './user-questions.js';
 import {
+  isSubagentDispatchProjection,
+  type SubagentDispatchProjection,
+} from './subagent-dispatch.js';
+import {
   privateRequestSchema,
   type PrivateInputCard,
   type PrivateInputResolution,
@@ -318,6 +322,13 @@ export interface ChannelMessage {
   toolApprovalRequest?: ToolApprovalRequestCard;
 
   sessionFailure?: SessionFailureCard;
+
+  /**
+   * Latest observable state of the subagent delegation this card message
+   * reports. Updated through the Channel live stream; the committed message
+   * keeps the state it was committed with.
+   */
+  subagentDispatch?: SubagentDispatchProjection;
 
   toolApprovalDecision?: ToolApprovalDecision;
 
@@ -819,6 +830,12 @@ export function isChannelMessage(value: unknown): value is ChannelMessage {
       (pause['reason'] !== undefined &&
         pause['reason'] !== 'consecutive' &&
         pause['reason'] !== 'session')
+    )
+      return false;
+  } else if (message['subagentDispatch'] !== undefined) {
+    if (
+      (message['author'] as ChannelMessageAuthor)?.kind !== 'system' ||
+      !isSubagentDispatchProjection(message['subagentDispatch'])
     )
       return false;
   } else if (
