@@ -142,7 +142,7 @@ describe('advisor opt-in UI through production actions and bridge', () => {
         if (endpoint === 'list')
           return { ok: true, value: { bots: [{ ...bot, subagentAdvisor: value }] } };
         value = payload['enabled'] as boolean;
-        // Match service summary: disabling removes the field rather than returning false.
+
         return {
           ok: true,
           value: { bot: { ...bot, ...(value ? { subagentAdvisor: true } : {}) } },

@@ -21,9 +21,7 @@ function remoteDescriptor(): RemoteDescriptor {
 
 describe('Subagent model advisor bridge registration', () => {
   it('marks subagentAdvisorSet as a remote method', () => {
-    expect(remoteDescriptor().methods.map((entry) => entry.method)).toContain(
-      'subagentAdvisorSet',
-    );
+    expect(remoteDescriptor().methods.map((entry) => entry.method)).toContain('subagentAdvisorSet');
   });
 
   it('forwards the toggle to the owning bridge method', () => {

@@ -1114,9 +1114,7 @@ function summarize(record: PersonaBotRecord, snapshot: BotStateSnapshot): Person
     ...(record.browserAccess === undefined ? {} : { browserAccess: record.browserAccess }),
     ...(record.browserProfile === undefined ? {} : { browserProfile: record.browserProfile }),
     ...(record.approvalTemplate === undefined ? {} : { approvalTemplate: record.approvalTemplate }),
-    ...(record.subagentAdvisor === undefined
-      ? {}
-      : { subagentAdvisor: record.subagentAdvisor }),
+    ...(record.subagentAdvisor === undefined ? {} : { subagentAdvisor: record.subagentAdvisor }),
   };
 }
 

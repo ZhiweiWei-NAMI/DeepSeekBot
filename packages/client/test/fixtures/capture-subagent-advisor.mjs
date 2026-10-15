@@ -1,4 +1,3 @@
-// Run from the repository root. Uses installed tools, no server, network, or installation.
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -19,8 +18,7 @@ const playwright = globSync(
 assert(playwright, 'Use an existing playwright-core installation');
 const { chromium } = require(resolve(root, dirname(playwright)));
 const executablePath = process.env['ADVISOR_FIXTURE_CHROMIUM'] ?? chromium.executablePath();
-// Extract the installed native Switch verbatim: avoid the primitives barrel's
-// unrelated, locally missing simple-icons dependency without installing anything.
+
 const clientRequire = createRequire(resolve(root, 'packages/client/package.json'));
 const primitives = clientRequire.resolve('@deepseek-ai/dsh-client-ui-primitives');
 const nativeSwitch = (await readFile(primitives, 'utf8')).match(
@@ -86,7 +84,7 @@ try {
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
   });
-  // Fail any accidental external request; there is no Host, provider, or credential service.
+
   await page.route('**/*', (route) => route.abort());
   await page.setContent(`<!doctype html><html lang="zh"><head><meta charset="utf-8"><style>
     :root { color-scheme: light;

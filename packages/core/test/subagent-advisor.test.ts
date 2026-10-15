@@ -155,8 +155,8 @@ describe('Subagent model advisor leak controls', () => {
 
   it('never sends the prompt body or raw secrets to the transport', async () => {
     const { records, log } = collector();
-    const transport = vi.fn(
-      async (_request: AdvisorHttpRequest, _signal: AbortSignal) => answer('c5'),
+    const transport = vi.fn(async (_request: AdvisorHttpRequest, _signal: AbortSignal) =>
+      answer('c5'),
     );
     const advisor = createSubagentAdvisor({ enabled: true, transport, log });
     await advisor.advise({
@@ -177,8 +177,8 @@ describe('Subagent model advisor leak controls', () => {
   });
 
   it('sends the excerpt only when explicitly enabled', async () => {
-    const transport = vi.fn(
-      async (_request: AdvisorHttpRequest, _signal: AbortSignal) => answer('c5'),
+    const transport = vi.fn(async (_request: AdvisorHttpRequest, _signal: AbortSignal) =>
+      answer('c5'),
     );
     const advisor = createSubagentAdvisor({
       enabled: true,
@@ -209,7 +209,11 @@ describe('Subagent model advisor decisions', () => {
     });
     expect(outcome).toEqual({ source: 'fallback', reason: 'disabled' });
     expect(transport).not.toHaveBeenCalled();
-    expect(records[0]).toMatchObject({ reason: 'disabled', calls: 0, route: ADVISOR_INHERIT_ROUTE });
+    expect(records[0]).toMatchObject({
+      reason: 'disabled',
+      calls: 0,
+      route: ADVISOR_INHERIT_ROUTE,
+    });
   });
 
   it('makes no request without a model plan', async () => {
@@ -232,7 +236,12 @@ describe('Subagent model advisor decisions', () => {
       plan: {
         ...plan,
         assignmentModels: [
-          { provider: 'opencode-go', model: 'deepseek-v4.1-flash', allowedEfforts: ['max'], defaultEffort: 'max' },
+          {
+            provider: 'opencode-go',
+            model: 'deepseek-v4.1-flash',
+            allowedEfforts: ['max'],
+            defaultEffort: 'max',
+          },
         ],
       },
       tool: 'bot_subagent',
@@ -463,8 +472,8 @@ describe('Subagent model advisor transport guards', () => {
   });
 
   it('redacts a candidate note in the state and in the choice criteria', async () => {
-    const transport = vi.fn(
-      async (_request: AdvisorHttpRequest, _signal: AbortSignal) => answer('c5'),
+    const transport = vi.fn(async (_request: AdvisorHttpRequest, _signal: AbortSignal) =>
+      answer('c5'),
     );
     const advisor = createSubagentAdvisor({ enabled: true, transport });
     await advisor.advise({
@@ -496,8 +505,8 @@ describe('Subagent model advisor transport guards', () => {
   });
 
   it('keeps an explicit provider-default effort instead of the option default', async () => {
-    const transport = vi.fn(
-      async (_request: AdvisorHttpRequest, _signal: AbortSignal) => answer('c0'),
+    const transport = vi.fn(async (_request: AdvisorHttpRequest, _signal: AbortSignal) =>
+      answer('c0'),
     );
     const advisor = createSubagentAdvisor({ enabled: true, transport });
     const outcome = await advisor.advise({
@@ -545,11 +554,9 @@ describe('Subagent model advisor transport guards', () => {
     const transport = vi.fn(
       (_request: AdvisorHttpRequest, signal: AbortSignal) =>
         new Promise<AdvisorTransportResult>((resolve) => {
-          signal.addEventListener(
-            'abort',
-            () => setTimeout(() => resolve(answer('c5')), 30),
-            { once: true },
-          );
+          signal.addEventListener('abort', () => setTimeout(() => resolve(answer('c5')), 30), {
+            once: true,
+          });
         }),
     );
     const advisor = createSubagentAdvisor({ enabled: true, transport, timeoutMs: 20 });

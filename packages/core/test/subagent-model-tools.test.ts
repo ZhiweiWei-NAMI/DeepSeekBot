@@ -325,7 +325,10 @@ describe('Bot-owned DSH Subagent tools with the model advisor', () => {
     let on = true;
     const advise = vi.fn(async () => advisedRoute);
     const resolver = vi.fn(() => (on ? { advise, record: vi.fn() } : undefined));
-    const { tool } = subagentHarness(vi.fn(async () => undefined), resolver);
+    const { tool } = subagentHarness(
+      vi.fn(async () => undefined),
+      resolver,
+    );
 
     await invocation(tool, { description: 'On', prompt: 'Run', run_in_background: false });
     on = false;
@@ -406,7 +409,11 @@ describe('Bot-owned DSH Subagent tools with the model advisor', () => {
       () => plan,
     );
 
-    await invocation(tool, { description: 'Default effort', prompt: 'Run', run_in_background: false });
+    await invocation(tool, {
+      description: 'Default effort',
+      prompt: 'Run',
+      run_in_background: false,
+    });
 
     const started = start.mock.calls[0]![1] as { agentOptions: { reasoningEffort?: string } };
     expect(started.agentOptions.reasoningEffort).toBeUndefined();
@@ -473,7 +480,11 @@ describe('Bot-owned DSH Subagent tools with the model advisor', () => {
       if (current.revision === 10) current = defaultOnly;
       else if (current.revision === 11) current = parentOnly;
     });
-    const { tool, start } = subagentHarness(resolveCallConfig, () => undefined, () => current);
+    const { tool, start } = subagentHarness(
+      resolveCallConfig,
+      () => undefined,
+      () => current,
+    );
 
     await expect(
       invocation(
@@ -513,4 +524,3 @@ describe('Bot-owned DSH Subagent tools with the model advisor', () => {
     });
   });
 });
-

@@ -1,4 +1,3 @@
-// Offline visual fixture: real setting / native Switch, in-memory bridge only.
 import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import {

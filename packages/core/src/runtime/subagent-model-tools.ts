@@ -133,7 +133,9 @@ function installOne(
           if (pending === undefined) return resolveSubagentRoute(planNow, parentOptions, args);
           if (planNow === undefined)
             throw new Error('Apply a Model Preset before selecting a Subagent model');
-          return { route: advisorRouteFor(planNow, pending.provider, pending.model, pending.effort) };
+          return {
+            route: advisorRouteFor(planNow, pending.provider, pending.model, pending.effort),
+          };
         };
         let decision = resolveAgainst(plan);
         let options = agentOptions(parentOptions, decision.route);

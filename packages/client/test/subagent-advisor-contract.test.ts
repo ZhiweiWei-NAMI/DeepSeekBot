@@ -5,8 +5,6 @@ import type { PersonaBotRecord } from '../../core/src/bots/persona-bot.js';
 import { createBotStateTracker } from '../../core/src/state/bot-state.js';
 import { parseBotSummary, setSubagentAdvisor, type BridgeCall } from '../src/client/bridge.js';
 
-// Only the registry persistence boundary is stubbed. Exercise the actual service
-// detail/summary projection and the production client parser without Host or I/O.
 function service() {
   const record: PersonaBotRecord = {
     slug: 'ada',
@@ -19,7 +17,7 @@ function service() {
     registry: {
       setSubagentAdvisor(slug: string, enabled: boolean) {
         if (slug !== record.slug) return { ok: false, reason: 'not-found' };
-        // Core registry's canonical off representation is absence, not false.
+
         if (enabled) record.subagentAdvisor = true;
         else delete record.subagentAdvisor;
         return { ok: true, record };

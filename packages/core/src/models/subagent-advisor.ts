@@ -141,8 +141,7 @@ export function advisorRouteFor(
   const option = assignmentModelsOf(plan).find(
     (candidate) => candidate.provider === provider && candidate.model === model,
   );
-  if (option === undefined)
-    throw new Error(`Assignment model ${provider}/${model} is not allowed`);
+  if (option === undefined) throw new Error(`Assignment model ${provider}/${model} is not allowed`);
   if (!option.allowedEfforts.includes(effort))
     throw new Error(
       `Assignment effort ${effort || 'provider default'} is not allowed for ${provider}/${model}`,
@@ -215,9 +214,9 @@ export function advisorQuestion(candidates: readonly AdvisorCandidate[]): {
   const criteria: Record<string, string> = {};
   for (const candidate of candidates) {
     const effort = candidate.effort === '' ? 'provider default' : candidate.effort;
-    const note =
-      candidate.note === undefined ? '' : `, note: ${redactAdvisorText(candidate.note)}`;
-    criteria[candidate.id] = `${candidate.provider}/${candidate.model} with effort ${effort}${note}`;
+    const note = candidate.note === undefined ? '' : `, note: ${redactAdvisorText(candidate.note)}`;
+    criteria[candidate.id] =
+      `${candidate.provider}/${candidate.model} with effort ${effort}${note}`;
   }
   return {
     type: 'choice',
@@ -347,16 +346,13 @@ export function createSubagentAdvisor(options: SubagentAdvisorOptions): Subagent
     const labelHash = advisorLabelHash(input.label);
     const plan = input.plan;
     const planRevision = plan === undefined ? 0 : plan.revision;
-    const record = (
-      outcome: AdvisorOutcome,
-      calls: number,
-      candidates: number,
-    ): AdvisorOutcome => {
+    const record = (outcome: AdvisorOutcome, calls: number, candidates: number): AdvisorOutcome => {
       emit({
         source: outcome.source,
         tool: input.tool,
         planRevision,
-        route: outcome.route === undefined ? ADVISOR_INHERIT_ROUTE : advisorRouteLabel(outcome.route),
+        route:
+          outcome.route === undefined ? ADVISOR_INHERIT_ROUTE : advisorRouteLabel(outcome.route),
         calls,
         latencyMs: now() - startedAt,
         candidates,
@@ -423,7 +419,11 @@ export function createSubagentAdvisor(options: SubagentAdvisorOptions): Subagent
       ]);
     } catch {
       if (input.signal.aborted)
-        return record({ source: 'fallback', reason: 'cancelled', route: fallbackRoute }, 1, candidates.length);
+        return record(
+          { source: 'fallback', reason: 'cancelled', route: fallbackRoute },
+          1,
+          candidates.length,
+        );
       return record(
         {
           source: 'fallback',
