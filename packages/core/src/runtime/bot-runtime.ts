@@ -11,6 +11,7 @@ import {
   type AssignmentExecutionWait,
 } from './assignment-approval-capacity.js';
 import { waitForAssignment, type AssignmentWaitOutcome } from './assignment-wait.js';
+import type { FinalReply } from './final-reply.js';
 import { externalMemberWake } from '../messaging/defaults.js';
 import {
   sourceSenderAllowed,
@@ -35,7 +36,12 @@ import {
   type AttachmentSaveInput,
 } from '../attachments/file-operations.js';
 import { authorizedPathRoot } from '../workspaces/grant-native-tools.js';
-import { mentionPeople, withMentionNames } from '../messaging/mention-text.js';
+import {
+  mentionPeople,
+  withInlineMentions,
+  withMentionNames,
+  withoutMentionMarkup,
+} from '../messaging/mention-text.js';
 import type { MessagingInboundEvent } from '../messaging/provider.js';
 import type { OutboxIntent, OutboundMessaging } from '../messaging/outbound.js';
 import type { PrivateInputOrigin } from '../credentials/im-origin.js';
@@ -300,6 +306,8 @@ export interface OrchestratorAgentRun {
   triage?: OrchestratorInboxTriage;
   acceptNativeInput?: () => boolean;
   requireContent?(): void;
+  /** Deliver a completed, explicitly marked final through the Host-bound private source. */
+  replyFinal?(reply: FinalReply): Promise<void>;
   sessionId: string;
   resume: boolean;
   bot: PersonaBotRecord;
@@ -578,6 +586,8 @@ export interface OrchestratorChannelAccess {
     mentionBotIds?: string[];
     mentionHumanIds?: string[];
     deliveryKey?: string;
+    /** Host check repeated immediately before a Human DM message commits. */
+    canCommit?(): boolean;
   }): Promise<ChannelMessage>;
 }
 
@@ -1210,7 +1220,16 @@ function renderInbox(units: InboxUnit[]): string {
         mentionedAccount: event.conversation.kind === 'group' ? event.mentionedAccount : undefined,
         report: source.report,
         voice: event.voice,
-        quote: source.quote?.text === undefined ? (event.quote ?? source.quote) : source.quote,
+        quote:
+          source.quote === undefined && event.quote === undefined
+            ? undefined
+            : {
+                ...source.quote,
+                text: source.quote?.text ?? event.quote?.text,
+                summary: event.quote?.summary,
+                attachmentKind: event.quote?.attachmentKind,
+                partial: event.quote?.partial,
+              },
         attachments: event.attachments?.map(({ id, name, sizeBytes, mediaType }) => ({
           id,
           name,
@@ -1346,6 +1365,7 @@ class BotRuntimeImplementation implements BotRuntime {
       sessionId: string;
       eventIds: Set<string>;
       acceptedEventIds: Set<string>;
+      replyController: AbortController;
       inboundChannelId: string | undefined;
       steeredChannelIds: Set<string>;
       spokenChannelIds: Set<string>;
@@ -3136,6 +3156,7 @@ class BotRuntimeImplementation implements BotRuntime {
   #acceptTurnSources(botSlug: string, sourceEventIds: readonly string[]): void {
     const turn = this.#turnSources.get(botSlug);
     for (const id of sourceEventIds) turn?.acceptedEventIds.add(id);
+    if (turn && turn.acceptedEventIds.size > 1) turn.replyController.abort();
   }
 
   #markAdmissionsSideEffect(botSlug: string, sourceEventIds: string[]): void {
@@ -4109,6 +4130,7 @@ class BotRuntimeImplementation implements BotRuntime {
     const sessionId = this.#agents.stopOrchestratorTurn?.(botSlug);
     if (sessionId === undefined) return undefined;
     this.#stoppedTurns.add(botSlug);
+    turn.replyController.abort();
     this.groupSendReview.stop(botSlug);
     this.#stopNotices.set(
       botSlug,
@@ -4279,10 +4301,13 @@ class BotRuntimeImplementation implements BotRuntime {
       ...reportEventIds,
       ...nativeSourceIds,
     ]);
+    const replyController = new AbortController();
+    const replySignal = AbortSignal.any([replyController.signal, this.#waitLifetime.signal]);
     this.#turnSources.set(bot.slug, {
       sessionId: orchestrator.sessionId,
       eventIds: turnSources,
       acceptedEventIds: new Set(turnSources),
+      replyController,
       inboundChannelId: channelId,
       steeredChannelIds: new Set(),
       spokenChannelIds: new Set(),
@@ -4380,6 +4405,65 @@ class BotRuntimeImplementation implements BotRuntime {
         });
       processing = this.#externalMessaging?.beginProcessing(bot.slug, typingSources);
       if (processing) this.#typingTurns.set(bot.slug, processing);
+      const services = this.#orchestratorServices(bot, {
+        sessionId: orchestrator.sessionId,
+        channelId,
+        sourceEventId,
+        markSideEffect,
+        readAdmissions,
+        importedFiles,
+        turnSources,
+        observeMemory,
+        observeReads: true,
+        modelContent: body + '\n' + inbox,
+      });
+      let replyAttempted = false;
+      const trackReply = <Args extends unknown[], Result>(send: (...args: Args) => Result) =>
+        (...args: Args): Result => {
+          replyAttempted = true;
+          return send(...args);
+        };
+      const send = services.channels.send;
+      const reply = services.externalMessaging?.reply;
+      services.channels.send = trackReply(send);
+      services.channels.sendToBot = trackReply(services.channels.sendToBot);
+      services.channels.requestGrant = trackReply(services.channels.requestGrant);
+      if (services.channels.react) services.channels.react = trackReply(services.channels.react);
+      const messaging = services.externalMessaging;
+      if (messaging) {
+        messaging.reply = trackReply(messaging.reply);
+        messaging.replyFile = trackReply(messaging.replyFile);
+        messaging.share = trackReply(messaging.share);
+        if (messaging.post) messaging.post = trackReply(messaging.post);
+        if (messaging.postConversation)
+          messaging.postConversation = trackReply(messaging.postConversation);
+      }
+      const replyCurrent = (): boolean => {
+        const active = this.#turnSources.get(bot.slug);
+        const current = this.#registry.get(bot.slug);
+        if (
+          replySignal.aborted ||
+          this.#closed ||
+          replyAttempted ||
+          active === undefined ||
+          active.eventIds !== turnSources ||
+          this.#stoppedTurns.has(bot.slug) ||
+          current === undefined ||
+          current.createdAt !== bot.createdAt ||
+          current.paused ||
+          active.steeredChannelIds.size > 0 ||
+          active.spokenChannelIds.size > 0
+        )
+          return false;
+        const sources = new Set([
+          ...turnSources,
+          ...active.acceptedEventIds,
+          ...readAdmissions,
+          ...units.map((unit) => unit.sourceEventId),
+          ...memoryEventIds,
+        ]);
+        return sources.size === 1 && sources.has(sourceEventId);
+      };
       await this.#agents.runOrchestrator({
         ...(acceptNativeInput === undefined ? {} : { acceptNativeInput }),
         requireContent: () =>
@@ -4408,18 +4492,90 @@ class BotRuntimeImplementation implements BotRuntime {
         })(),
         inbox,
         inboundChannelId: channelId,
-        ...this.#orchestratorServices(bot, {
-          sessionId: orchestrator.sessionId,
-          channelId,
-          sourceEventId,
-          markSideEffect,
-          readAdmissions,
-          importedFiles,
-          turnSources,
-          observeMemory,
-          observeReads: true,
-          modelContent: body + '\n' + inbox,
-        }),
+        ...services,
+        replyFinal: async (result) => {
+          if (result.action !== 'reply') return;
+          const refuse = (reason: string): void =>
+            this.#warn?.(`final-reply phase=refused source=${sourceEventId} reason=${reason}`);
+          if (!replyCurrent()) {
+            refuse(replyAttempted ? 'explicit-send-attempt' : 'source-not-unique-or-inactive');
+            return;
+          }
+          const source = this.#database.read((db) =>
+            db
+              .prepare(
+                'SELECT source_kind, channel_id, message_id FROM source_events WHERE source_event_id = ?',
+              )
+              .get(sourceEventId),
+          );
+          let receipt: string;
+          if (
+            source?.source_kind === 'bridge-message' &&
+            channelId === undefined &&
+            messaging &&
+            reply
+          ) {
+            if (messaging.read(sourceEventId).event.conversation.kind !== 'dm') {
+              refuse('private-source-required');
+              return;
+            }
+            const release = this.#externalMessaging!.privateInputReplyAuthority(
+              bot.slug,
+              sourceEventId,
+              { signal: replySignal, current: replyCurrent },
+            );
+            try {
+              const intent = await reply(sourceEventId, result.text);
+              if (intent.state !== 'provider-accepted') {
+                this.#warn?.(
+                  `final-reply phase=${intent.state} source=${sourceEventId} intent=${intent.id} retry=inspect-outbox`,
+                );
+                return;
+              }
+              receipt = intent.id;
+            } catch (error) {
+              if (replySignal.aborted) return;
+              throw error;
+            } finally {
+              release();
+            }
+          } else {
+            const channel = channelId === undefined ? undefined : this.#channels.get(channelId);
+            if (
+              source?.source_kind !== 'human-message' ||
+              source.channel_id !== channelId ||
+              typeof source.message_id !== 'string' ||
+              channel?.type !== 'dm' ||
+              channel.botSlug !== bot.slug ||
+              isBotDmChannel(channel)
+            ) {
+              refuse('private-source-required');
+              return;
+            }
+            try {
+              const message = await send({
+                channelId: channel.id,
+                replyTo: source.message_id,
+                body: result.text,
+                deliveryKey: 'final-reply',
+                canCommit: replyCurrent,
+              });
+              receipt = message.id;
+            } catch (error) {
+              if (replySignal.aborted) return;
+              throw error;
+            }
+          }
+          if (result.complete && !replySignal.aborted) {
+            try {
+              services.triage?.resolve({ ids: [sourceEventId], outcome: 'done' });
+            } catch {
+              this.#warn?.(
+                `final-reply phase=committed source=${sourceEventId} receipt=${receipt} reason=inbox-resolution-failed retry=inbox_resolve`,
+              );
+            }
+          }
+        },
       });
       if (observeMemory) {
         this.#memory?.reconcileTurn({
@@ -4447,6 +4603,7 @@ class BotRuntimeImplementation implements BotRuntime {
         );
       throw error;
     } finally {
+      replyController.abort();
       await processing?.stop();
       if (this.#typingTurns.get(bot.slug) === processing) this.#typingTurns.delete(bot.slug);
       if (this.#turnSources.get(bot.slug)?.eventIds === turnSources) {
@@ -4673,8 +4830,19 @@ class BotRuntimeImplementation implements BotRuntime {
                 );
               },
               reply: (id: string, text: string) => {
+                let body = withoutMentionMarkup(text);
+                if (/<@!?[A-Za-z0-9_-]+>/u.test(text)) {
+                  const source = this.#externalMessaging!.inbound.readShared(bot.slug, id);
+                  if (turn.observeReads)
+                    this.#observeExternalRead(bot.slug, [id], turn.readAdmissions);
+                  body = withInlineMentions(
+                    source.platform,
+                    text,
+                    mentionPeople(source.event.actor, source.event.mentions),
+                  );
+                }
                 turn.markSideEffect();
-                return this.#externalMessaging!.reply(bot.slug, id, text);
+                return this.#externalMessaging!.reply(bot.slug, id, body);
               },
             },
           }),
@@ -6307,7 +6475,7 @@ class BotRuntimeImplementation implements BotRuntime {
         }
         beforeSend();
         const message: ChannelMessage = {
-          id: this.#createMessageId(),
+          id: this.#deliveryMessageId(sourceEventId, input.deliveryKey),
           at: this.#now().toISOString(),
           author: { kind: 'bot', slug: botSlug },
           body,
@@ -6315,13 +6483,23 @@ class BotRuntimeImplementation implements BotRuntime {
           ...(input.replyTo === undefined ? {} : { replyTo: input.replyTo }),
           ...this.#perf(sessionId, body),
         };
-        const appended = await this.#channels.appendMessage(channel.id, message, {
-          sessionId,
-          sourceEventId,
-        });
-        if (appended === undefined) throw new Error(`Channel disappeared: ${channel.id}`);
+        const result = await this.#channels.appendMessageOnce(
+          channel.id,
+          message,
+          undefined,
+          { sessionId, sourceEventId },
+          () => {
+            if (input.canCommit?.() === false) return false;
+            requireReplySource();
+            this.#database.read((db) => requireSourceEffects(db, sourceEventId, botSlug));
+            return true;
+          },
+        );
+        if (result.status === 'missing') throw new Error(`Channel disappeared: ${channel.id}`);
+        if (result.status === 'conflict')
+          throw new Error('Human DM delivery was cancelled or has different content');
         if (steered?.sessionId === sessionId) steered.spokenChannelIds.add(channel.id);
-        return appended;
+        return result.message;
       },
     };
   }
