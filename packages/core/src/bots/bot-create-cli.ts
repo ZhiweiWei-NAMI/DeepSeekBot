@@ -200,6 +200,7 @@ Usage:
   deepseekbot git-install
   deepseekbot pairing-list <id>
   deepseekbot pairing-review <id> <pairing-id> --decision approve|reject|revoke [--role <role-id> | --capability <c> ...] [--confirm]
+  deepseekbot pairing-review <id> <pairing-id> --decision approve --capability manage-profile --confirm
   deepseekbot workspace-options
   deepseekbot grant-create <id> --workspace <workspace-id>
   deepseekbot browser-access-set <id> (--enabled | --disabled)

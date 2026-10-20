@@ -24,6 +24,7 @@ import {
 } from './directory.js';
 import {
   createBotPairing,
+  managementPairingApplies,
   type BotPairing,
   type PairingRequest,
   type PairingReviewInput,
@@ -280,6 +281,7 @@ export interface MessagingSnapshot {
 }
 
 export interface OutboundMessaging {
+  captureManagementAuthority(botSlug: string, sourceEventId: string): () => void;
   privateInputReplyAuthority(
     botSlug: string,
     sourceEventId: string,
@@ -1373,6 +1375,66 @@ export function createOutboundMessaging(options: {
   }
 
   const service: OutboundMessaging = {
+    captureManagementAuthority(botSlug, sourceEventId) {
+      const inspect = () => {
+        active(botSlug);
+        if (!inbound.available(botSlug, sourceEventId)) throw new MessagingError('source-unavailable');
+        const source = inbound.read(botSlug, sourceEventId);
+        const value = grant(botSlug, source.grantId);
+        const identity = enabledBinding(value.bindingId);
+        const request = pairing.assert(botSlug, identity.id, source.event.actor.id, 'manage-profile');
+        const human = request.humanAuthorization;
+        const row = database.read((db) =>
+          db.prepare('SELECT rowid FROM source_events WHERE source_event_id = ?').get(sourceEventId),
+        );
+        if (
+          source.ingestId ||
+          value.providerId !== 'dsh-im/weixin' ||
+          value.platform !== 'weixin' ||
+          identity.providerId !== value.providerId ||
+          identity.platform !== 'weixin' ||
+          identity.botSlug !== botSlug ||
+          identity.accountRef !== value.accountRef ||
+          identity.fingerprint !== value.fingerprint ||
+          source.grantRevision !== value.revision ||
+          source.event.channel !== 'weixin' ||
+          source.event.botId !== identity.accountRef ||
+          source.event.fingerprint !== identity.fingerprint ||
+          !managementPairingApplies(source.event) ||
+          value.receiveScope?.kind !== 'dm' ||
+          value.receiveScope.conversationId !== source.event.conversation.id ||
+          request.purpose !== 'management' ||
+          request.reviewedBy !== 'authenticated-web' ||
+          request.conversationId !== source.event.conversation.id ||
+          human?.humanId !== 'local-human' ||
+          human.accountRef !== identity.accountRef ||
+          human.fingerprint !== identity.fingerprint ||
+          !(Number(row?.rowid) > human.afterSourceRowid) ||
+          !(Date.parse(source.at) >= Date.parse(request.reviewedAt ?? ''))
+        )
+          throw new MessagingError('human-management-required');
+        const signal = inbound.sourceSignal(botSlug, sourceEventId);
+        signal.throwIfAborted();
+        return {
+          signal,
+          revision: JSON.stringify([
+            identity.id,
+            identity.revision,
+            value.id,
+            value.revision,
+            request.id,
+            request.revision,
+          ]),
+        };
+      };
+      const captured = inspect();
+      return () => {
+        captured.signal.throwIfAborted();
+        const current = inspect();
+        if (current.signal !== captured.signal || current.revision !== captured.revision)
+          throw new MessagingError('human-management-stale');
+      };
+    },
     privateInputReplyAuthority(botSlug, sourceEventId, authority) {
       const key = privateReplyKey(botSlug, sourceEventId);
       let authorities = privateReplies.get(key);

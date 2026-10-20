@@ -23,6 +23,8 @@ const IMAGE_COMMANDS = new Set([
 const CODES = new Set([
   'tob-authority-required',
   'human-dm-required',
+  'human-management-required',
+  'human-management-stale',
   'stale-setting',
   'invalid-setting',
   'settings-unavailable',

@@ -650,6 +650,7 @@ deepseekbot git-install
 deepseekbot pairing-list <bot-id>
 deepseekbot pairing-review <bot-id> <pairing-id> --decision approve --role <role-id>
 deepseekbot pairing-review <bot-id> <pairing-id> --decision approve --capability approve [--capability answer ...]
+deepseekbot pairing-review <bot-id> <pairing-id> --decision approve --capability manage-profile --confirm
 deepseekbot pairing-review <bot-id> <pairing-id> --decision reject
 deepseekbot pairing-review <bot-id> <pairing-id> --decision revoke --confirm
 ```
@@ -785,13 +786,34 @@ deepseekbot settings botharness-client
 printf '%s' '{"assignmentConcurrencyLimit":3}' | deepseekbot settings-set botharness-client --patch-stdin --expected-revision 12 --previous-value '{"assignmentConcurrencyLimit":8}'
 ```
 
-`capabilities` (also scoped `--help`) reports supported commands, fields, required review inputs and coded refusals. The read returns `{scope, ns, revision, value}`; `value` contains only the allowed fields. The write goes through existing Host approval policy for the parsed namespace, previous value, proposed value and revision. It rechecks the actual Tob root Orchestrator and the exact accepted Human DM source before and after approval and at execution, then reads back the native Settings value. Group/IM requests, Bot-originated input, Assignment Sessions and caller-supplied identities cannot grant this authority.
+`capabilities` (also scoped `--help`) reports supported commands, fields, required review inputs and coded refusals. The read returns `{scope, ns, revision, value}`; `value` contains only the allowed fields. The write goes through existing Host approval policy for the parsed namespace, previous value, proposed value and revision. It rechecks the actual Tob root Orchestrator and the exact accepted Human DM source before and after approval and at execution, then reads back the native Settings value. Group requests, unverified external IM requests, Bot-originated input, Assignment Sessions and caller-supplied identities cannot grant this authority. An expressly authorized same-Human WeChat DM may qualify through the pairing flow below; the transport alone never grants access.
 
 The Host supplies an ephemeral loopback endpoint and scoped token to this Shell's child environment. This is a short-lived bearer capability, not a Human administrator credential or an isolation boundary against the same OS user; do not print or persist it. It expires when the Shell finishes, aborts or is disposed. Unsupported commands/options, incomplete scoped context and attempts to select another Host, token or offline home refuse rather than falling back to Human/offline access. `stale-setting` requires a new read and proposal; `agent-write-uncertain`, `setting-outcome-uncertain` and `setting-readback-mismatch` require read-back before any retry. A fresh Shell execution is required after context expiry.
 
 Authenticated Human `settings-set` keeps its existing behavior. It additionally accepts the paired `--expected-revision` and `--previous-value` flags to apply a previously reviewed patch; the latter is a JSON object with the same fields as the patch. Omitting both retains the existing read-then-write flow. Tob deletion/archiving still refuses with `protected-bot`.
 
 The [UI/CLI coverage inventory](agents/cli-ui-coverage.md) distinguishes existing Human commands from scoped Tob access and tracks the remaining coverage work. See [ADR-0224](adr/0224-tob-management-uses-scoped-native-shell-cli.md) for authority and lifecycle boundaries.
+
+### Verified Human WeChat management DMs
+
+WeChat's paired account owner is not automatically the local Human. Do not approve a contact because of their display name, ordinary sender access or a message claiming to be the owner. Only the authenticated Host Human can explicitly authorize the same Human's exact WeChat account and sender; Tob cannot grant this through its scoped CLI.
+
+1. Send the literal `/pair` in the owner's WeChat DM to Tob. This creates a pending management request, not management access; ordinary message admission stays unchanged.
+2. In the authenticated Human online CLI, run `deepseekbot pairing-list <tob-id>`. Independently verify the person and inspect the request's `bindingId`, `accountRef`, `fingerprint`, `actorId` and `conversationId`. The request must target this Tob and this account's direct conversation with that sender.
+3. Approve that exact pending request with the sole capability `manage-profile` and explicit confirmation:
+
+   ```bash
+   deepseekbot pairing-review <tob-id> <pairing-id> --decision approve --capability manage-profile --confirm
+   ```
+
+4. Send a **new** management message in that WeChat DM after approval. Pre-approval Source Events are never retroactively promoted. Tob may then use only its existing scoped commands, with the same native approval, revision, cancellation and stop checks as the local Human DM.
+5. Revoke through the existing Web pairing controls or authenticated Human CLI:
+
+   ```bash
+   deepseekbot pairing-review <tob-id> <pairing-id> --decision revoke --confirm
+   ```
+
+This slice grants through the authenticated CLI only, not a new Web grant control or a WeChat approval button. It stores the confirmation in the existing management pairing, bound to the account fingerprint, sender and DM; it adds no Role, Permission Group or general Human identity directory. Every accepted source in the Tob turn must qualify independently: groups, Ingest, borrowed sources and unverified contacts cannot inherit the grant. A changed/revoked Binding, Grant, pairing revision or Consumer lease invalidates a captured Shell authority. `human-management-required` means the external source lacks valid authorization; `human-management-stale` means captured authorization no longer matches. The response scope remains `current-human-dm-shell` for compatibility and includes an expressly verified Human DM regardless of transport; it is not blanket IM administration.
 
 ### Tob Bot creation, profiles and lifecycle
 

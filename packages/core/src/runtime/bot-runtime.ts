@@ -3362,6 +3362,7 @@ class BotRuntimeImplementation implements BotRuntime {
       throw new TobError('human-dm-required');
     const accepted = new Set(turn.acceptedEventIds);
     const dm = dmChannelId(owner.botSlug);
+    const externalAuthorities = new Map<string, () => void>();
     const authorize = () => {
       const currentOwner = this.#ownership.resolve(sessionId);
       if (
@@ -3385,9 +3386,19 @@ class BotRuntimeImplementation implements BotRuntime {
           const event = db
             .prepare('SELECT source_kind, channel_id FROM source_events WHERE source_event_id = ?')
             .get(id);
-          if (event?.source_kind !== 'human-message' || event.channel_id !== dm)
-            throw new TobError('human-dm-required');
           requireSourceEffects(db, id, owner.botSlug);
+          if (event?.source_kind === 'human-message' && event.channel_id === dm) continue;
+          if (event?.source_kind !== 'bridge-message') throw new TobError('human-dm-required');
+          const captured = externalAuthorities.get(id);
+          try {
+            if (!this.#externalMessaging) throw new TobError('human-management-required');
+            const authority =
+              captured ?? this.#externalMessaging.captureManagementAuthority(owner.botSlug, id);
+            authority();
+            externalAuthorities.set(id, authority);
+          } catch {
+            throw new TobError(captured ? 'human-management-stale' : 'human-management-required');
+          }
         }
       });
     };

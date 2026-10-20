@@ -63,7 +63,7 @@ export const HOST_ADMIN_COMMANDS = [
   { command: 'pairing-list', description: "list a Bot's IM pairing requests and roles" },
   {
     command: 'pairing-review',
-    description: 'approve, reject or revoke an IM pairing request (revoke needs --confirm)',
+    description: 'review an IM pairing (revoke and manage-profile need --confirm)',
   },
 ] as const;
 
@@ -114,6 +114,7 @@ const POSITIONAL_NAMES: Record<number, string> = {
 interface PairingReview {
   kind: 'approve' | 'reject' | 'revoke';
   capabilities?: PairingCapability[];
+  confirmHuman?: true;
   roleId?: string;
 }
 
@@ -164,6 +165,10 @@ function validate(command: HostAdminCommand, rest: string[], values: HostAdminVa
       usage('Revoking ends this person’s access through the Bot. Pass --confirm to revoke.');
     return { kind } satisfies PairingReview;
   }
+  if (capabilities.includes('manage-profile') && values.confirm !== true)
+    usage(
+      'manage-profile binds this WeChat sender to the local Human. Verify the account fingerprint, sender and DM, then pass --confirm.',
+    );
   if (roles.length > 1) usage('pairing-review takes at most one --role.');
   if ((roles.length === 1) === capabilities.length > 0)
     usage('Approve needs exactly one of --role <role-id> or --capability <capability> ...');
@@ -172,6 +177,7 @@ function validate(command: HostAdminCommand, rest: string[], values: HostAdminVa
     : ({
         kind,
         capabilities: [...new Set(capabilities)] as PairingCapability[],
+        ...(capabilities.includes('manage-profile') ? { confirmHuman: true as const } : {}),
       } satisfies PairingReview);
 }
 
@@ -200,6 +206,10 @@ function pairingSummary(value: unknown) {
     'status',
     'purpose',
     'accountName',
+    'bindingId',
+    'accountRef',
+    'fingerprint',
+    'humanAuthorization',
     'actorId',
     'actorName',
     'conversationId',
@@ -344,6 +354,7 @@ export async function runHostAdminCommand(
             id: pairingId,
             expectedRevision: pairing['revision'],
             ...(review?.capabilities === undefined ? {} : { capabilities: review.capabilities }),
+            ...(review?.confirmHuman ? { confirmHuman: true } : {}),
             ...(role === undefined
               ? {}
               : { roleId: role['id'], expectedRoleRevision: role['revision'] }),

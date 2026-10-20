@@ -636,6 +636,7 @@ deepseekbot git-install
 deepseekbot pairing-list <bot-id>
 deepseekbot pairing-review <bot-id> <pairing-id> --decision approve --role <role-id>
 deepseekbot pairing-review <bot-id> <pairing-id> --decision approve --capability approve [--capability answer ...]
+deepseekbot pairing-review <bot-id> <pairing-id> --decision approve --capability manage-profile --confirm
 deepseekbot pairing-review <bot-id> <pairing-id> --decision reject
 deepseekbot pairing-review <bot-id> <pairing-id> --decision revoke --confirm
 ```
@@ -771,13 +772,34 @@ deepseekbot settings botharness-client
 printf '%s' '{"assignmentConcurrencyLimit":3}' | deepseekbot settings-set botharness-client --patch-stdin --expected-revision 12 --previous-value '{"assignmentConcurrencyLimit":8}'
 ```
 
-`capabilities`（以及受限模式的 `--help`）列出支持的命令、字段、必需的审核输入和带代码的拒绝原因。读取返回 `{scope, ns, revision, value}`，`value` 只包含授权字段。写入将解析后的命名空间、旧值、新值和 revision 交给现有 Host 审批策略；审批前后和执行时重验真实 Tob root Orchestrator 与准确的已准入 Human DM 来源，随后读回 native Settings 的值。群聊／外部 IM、Bot 来源、Assignment Sessions 和调用方自报身份均不能授予此权限。
+`capabilities`（以及受限模式的 `--help`）列出支持的命令、字段、必需的审核输入和带代码的拒绝原因。读取返回 `{scope, ns, revision, value}`，`value` 只包含授权字段。写入将解析后的命名空间、旧值、新值和 revision 交给现有 Host 审批策略；审批前后和执行时重验真实 Tob root Orchestrator 与准确的已准入 Human DM 来源，随后读回 native Settings 的值。群聊、未验证的外部 IM、Bot 来源、Assignment Sessions 和调用方自报身份均不能授予此权限。经下方配对流程明确授权、属于同一 Human 的微信私聊可以具备权限；transport 本身不授予权限。
 
 Host 将短期 loopback endpoint 与受限 token 注入这次 Shell 的子进程环境。它是短期 bearer capability，不是 Human 管理员凭据，也不构成同一 OS 用户之间的隔离边界；不要打印或持久化它。Shell 完成、取消或释放后立即撤销。不支持的命令／参数、不完整的受限上下文、指定其他 Host／token／离线 home 的尝试均会拒绝，不回退到 Human 或离线访问。`stale-setting` 要求重新读取并提案；`agent-write-uncertain`、`setting-outcome-uncertain` 和 `setting-readback-mismatch` 要求重试前先读回。上下文过期后必须发起新的 Shell 执行。
 
 已认证 Human 的 `settings-set` 保持原行为，新增成对的 `--expected-revision` 与 `--previous-value` 参数，用于提交已审核的 patch；后者为与 patch 字段一致的 JSON 对象。同时省略这两个参数仍使用原有先读再写流程。Tob 的删除／归档仍返回 `protected-bot`。
 
 [UI／CLI 覆盖清单](agents/cli-ui-coverage.md) 区分既有 Human 命令和 Tob 受限访问，并跟踪后续缺口。身份与生命周期边界见 [ADR-0224](adr/0224-tob-management-uses-scoped-native-shell-cli.md)。
+
+### 已验证 Human 的微信管理私聊
+
+微信配对账号的 owner 不自动等于本地 Human。不能因显示名、普通发件人权限或消息自称 owner 就批准管理权限。仅已认证 Host Human 可以明确授权属于同一 Human 的准确微信账号和发件人；Tob 不能通过自己的受限 CLI 授予此权限。
+
+1. 从 owner 与 Tob 的微信私聊发送原文 `/pair`。它只创建待审核管理请求，不授予管理权限，也不改变普通消息准入。
+2. 在已认证 Human 的在线 CLI 执行 `deepseekbot pairing-list <tob-id>`。独立核实对方身份，并核对请求的 `bindingId`、`accountRef`、`fingerprint`、`actorId`、`conversationId`；请求必须属于该 Tob 和该账号与该发件人的私聊。
+3. 只用 `manage-profile` 能力明确确认批准准确的待审核请求：
+
+   ```bash
+   deepseekbot pairing-review <tob-id> <pairing-id> --decision approve --capability manage-profile --confirm
+   ```
+
+4. 批准后从该微信私聊发送一条**新的**管理消息。批准前的 Source Event 不会追溯提权。Tob 只可使用现有受限命令，仍沿用本地 Human DM 的原生审批、revision、取消和停止校验。
+5. 使用现有 Web 配对控件或已认证 Human CLI 撤销：
+
+   ```bash
+   deepseekbot pairing-review <tob-id> <pairing-id> --decision revoke --confirm
+   ```
+
+本片仅通过已认证 CLI 授予，不新增 Web 授予控件或微信审批按钮。确认记录保存在既有管理配对内，绑定账号指纹、发件人和私聊；不新增 Role、Permission Group 或通用 Human 身份目录。Tob 回合的每个已准入来源都必须独立满足权限；群聊、Ingest、借用来源及未验证联系人不会继承授权。Binding、Grant、配对 revision 或 Consumer lease 变化／撤销会使已捕获的 Shell 权限失效。`human-management-required` 表示外部来源没有有效授权，`human-management-stale` 表示捕获的授权已不匹配。返回 scope 为兼容保留 `current-human-dm-shell`，它包含跨 transport 明确验证的 Human DM，不代表开放全部 IM 管理权限。
 
 ### Tob 创建 Bot、资料与生命周期
 
