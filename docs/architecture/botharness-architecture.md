@@ -353,6 +353,12 @@ PersonaBot Profile 的 IM 连接经现有 Typert/API Gateway 选择账号和已�
 
 首次能力只能由认证 Web Human 显式勾选并按当前申请 revision 审核；定位码不能兑换权限，首位申请者不会自动成为管理员。能力仅覆盖当前 Bot 的批准、拒绝、回答及保存规则资格，不扩展 VPS、原生 DSH API、其他 Bot 或审批人管理。每次使用重查当前 Binding、Bot、真实 actor、能力和状态；暂停期间不可用，永久撤销后重新配对必须重新审核。该切片交付配对与 Web 审核，IM 审批／提问控件仍由后续切片接入原生权威。参数、恢复及审计边界见 [ADR-0136](../adr/0136-lark-pairing-is-reviewed-bot-scoped-operational-authority.md)。
 
+### 已验证 Human 的微信管理私聊
+
+沿用 Messaging 既有 `management` pairing，显式确认某个微信私聊发送者就是本地 Human。Provider 已检查的 owner DM 发送纯文本 `/pair` 只产生待审核元数据；认证 Host Human 通过 `pairing-list` 核对 Bot、Binding、账号引用／fingerprint、actor 与 DM，再用既有 `pairing-review` 仅授予 `manage-profile` 并传入 `--confirm`。批准在同一 pairing JSON 保存 `local-human` 证明及当时 Source Event rowid 高水位，不新增身份目录、Role、授权组、数据库迁移或收件策略。微信原生 owner 配对、同名或 prompt 自称都不是此授权；外部受托审核人不能授予。既有 revoke 命令及 Web 撤销控件可撤权。
+
+只有批准后新提交、属于接收 Bot 自己的微信 DM Source Event 才能授权受保护 Tob 的现有 scoped Shell CLI。Runtime 逐一检查当前 Turn 的全部已准入来源，保留应用内 Human DM 原路径，拒绝群聊、Ingest、共享／借用身份及未验证来源。Messaging 重查准确 Binding、账号／fingerprint、actor／DM、接收 Grant 与存活 Provider Consumer。每次 Shell 捕获 Binding、Grant、pairing revision 及 Consumer signal；撤销、暂停、替换、来源移除、Turn 或 accepted 集变化均阻止后续操作。原生审批、操作 revision、取消门和命令 allowlist 不变。兼容标签 `current-human-dm-shell` 包含这一明确验证的 Human DM，并不代表任意微信 transport；缺少验证返回 `human-management-required`，已捕获授权失效返回 `human-management-stale`。应用与真实平台验收仍属独立阶段。
+
 ### Lark 普通角色与自动申请（ADR-0165）
 
 Sender permission diagnostics validate the Source Event's original ingress authority before reporting that a platform has no Role policy (#1951). Grant-backed sources retain their Binding and Grant checks; Conversation Ingest sources record `ingressBindingId` in the canonical Source Event and validate that original Binding plus the current Ingest. A shared reader needs its own current Binding in the same Provider/account scope, and any resolved Role must belong to that checked Binding. Disabled, revoked, replaced, blocked, or unavailable authority remains a refusal. Legacy Ingest sources without an ingress Binding anchor return `no-current-scoped-identity`; a fresh message supplies the evidence rather than attributing old content to a replacement Binding. This adds no content copy, grant, listener, or schema migration.

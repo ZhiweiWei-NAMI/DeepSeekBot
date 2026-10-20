@@ -38,6 +38,10 @@ const labels = {
   'review-pairing': 'pairing.reviewCapability',
 } as const;
 
+function capabilityLabel(t: BotHarnessTranslate, capability: PairingCapability): string {
+  return capability === 'manage-profile' ? capability : t(labels[capability]);
+}
+
 function auditColumn<Row extends { createdAt?: string; updatedAt?: string }>(
   t: BotHarnessTranslate,
 ): ColumnDef<Row> {
@@ -501,7 +505,7 @@ function PairingRow({
                   value: role.id,
                   label: role.name,
                   hint: role.capabilities.length
-                    ? role.capabilities.map((capability) => t(labels[capability])).join(' · ')
+                    ? role.capabilities.map((capability) => capabilityLabel(t, capability)).join(' · ')
                     : t('pairing.ordinary'),
                 })),
               ]}
@@ -512,7 +516,7 @@ function PairingRow({
               {capabilities.map((capability) => (
                 <Checkbox
                   key={capability}
-                  label={t(labels[capability])}
+                  label={capabilityLabel(t, capability)}
                   checked={selected.includes(capability)}
                   disabled={busy}
                   onChange={(checked) =>
@@ -564,7 +568,7 @@ function PairingRow({
         <>
           <div className="bh-im-pairing-capabilities">
             {request.capabilities.map((capability) => (
-              <Tag key={capability}>{t(labels[capability])}</Tag>
+              <Tag key={capability}>{capabilityLabel(t, capability)}</Tag>
             ))}
           </div>
           <Button
@@ -642,7 +646,7 @@ function RoleDetails({
       <p className="bh-pairing-behavior">{role.behavior}</p>
       <div className="bh-im-pairing-capabilities">
         {role.capabilities.length ? (
-          role.capabilities.map((capability) => <Tag key={capability}>{t(labels[capability])}</Tag>)
+          role.capabilities.map((capability) => <Tag key={capability}>{capabilityLabel(t, capability)}</Tag>)
         ) : (
           <Tag>{t('pairing.ordinary')}</Tag>
         )}
@@ -651,7 +655,7 @@ function RoleDetails({
         <div className="bh-im-pairing-capabilities">
           <span>{t('pairing.delegable')}</span>
           {role.delegableCapabilities.map((capability) => (
-            <Tag key={capability}>{t(labels[capability])}</Tag>
+            <Tag key={capability}>{capabilityLabel(t, capability)}</Tag>
           ))}
         </div>
       ) : null}
@@ -799,7 +803,7 @@ function RoleDialog({
                 (capability) => (
                   <Checkbox
                     key={capability}
-                    label={t(labels[capability])}
+                    label={capabilityLabel(t, capability)}
                     checked={selected.includes(capability)}
                     disabled={busy}
                     onChange={(checked) =>
@@ -845,7 +849,7 @@ function RoleDialog({
                 (capability) => (
                   <Checkbox
                     key={capability}
-                    label={`${t('pairing.delegateAllow')} · ${t(labels[capability])}`}
+                    label={`${t('pairing.delegateAllow')} · ${capabilityLabel(t, capability)}`}
                     checked={delegable.includes(capability)}
                     disabled={busy}
                     onChange={(checked) =>

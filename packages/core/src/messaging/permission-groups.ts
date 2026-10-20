@@ -263,7 +263,7 @@ export function effectivePairingPermissions(
     !binding.enabled ||
     binding.revokedAt ||
     binding.botSlug !== botSlug ||
-    binding.platform !== 'feishu'
+    (binding.platform !== 'feishu' && binding.platform !== 'weixin')
   )
     return empty;
   const pairings = (
@@ -280,10 +280,16 @@ export function effectivePairingPermissions(
       id: p.id,
       name: p.accountName,
       revision: p.revision,
-      allow: p.capabilities,
+      allow:
+        binding.platform === 'weixin'
+          ? p.capabilities.filter(
+              (cap) => cap === 'manage-profile' && p.humanAuthorization?.humanId === 'local-human',
+            )
+          : p.capabilities,
       deny: [],
     }));
-  const person = pairings.find((p) => p.purpose === 'conversation');
+  const person =
+    binding.platform === 'feishu' ? pairings.find((p) => p.purpose === 'conversation') : undefined;
   let currentBehavior: EffectiveBehaviorPermission[] = [];
   if (person) {
     const row = db

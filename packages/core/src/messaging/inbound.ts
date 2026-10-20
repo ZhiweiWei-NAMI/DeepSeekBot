@@ -21,7 +21,7 @@ import {
   type ConversationIngestSnapshot,
 } from './conversation-ingest.js';
 import type { MessagingIdentity } from './identity.js';
-import type { BotPairing, PairingRequest } from './pairing.js';
+import { managementPairingApplies, type BotPairing, type PairingRequest } from './pairing.js';
 import { chatPairingApplies } from './chat-sender.js';
 import {
   trustedSenderReference,
@@ -1802,11 +1802,16 @@ export function createInboundMessaging(options: {
     event: MessagingInboundEvent,
     signal: AbortSignal,
   ) => {
-    if (!options.pairing || !chatPairingApplies(event) || provider.id !== `dsh-im/${event.channel}`)
+    if (
+      !options.pairing ||
+      (!chatPairingApplies(event) && !managementPairingApplies(event)) ||
+      provider.id !== `dsh-im/${event.channel}`
+    )
       return false;
     signal.throwIfAborted();
     const explicit = /^\/pair(?:\s|$)/.test(event.text.trim());
     if (explicit && event.channel === 'slack') return true;
+    if (event.channel === 'weixin' && !explicit) return false;
     const row = database.read((db) =>
       db
         .prepare(
@@ -1818,6 +1823,20 @@ export function createInboundMessaging(options: {
     const lease = controls.get(row.id);
     if (!lease || lease.controller.signal.aborted) return explicit;
     const identity = database.read((db) => readMessagingIdentity(db, row.id));
+    if (event.channel === 'weixin') {
+      const targets = await bounded(provider.targets(event.botId));
+      signal.throwIfAborted();
+      if (
+        controls.get(row.id) !== lease ||
+        lease.controller.signal.aborted ||
+        !targets.some(
+          (target) =>
+            target.receiveScope?.kind === 'dm' &&
+            target.receiveScope.conversationId === event.conversation.id,
+        )
+      )
+        return true;
+    }
     options.pairing.observePrivate(row.id, event);
     const restricted = database.read((db) => readSenderPolicy(db, identity.botSlug).restricted);
     const intentional = event.conversation.kind === 'dm' || event.mentionedAccount;
@@ -1898,7 +1917,9 @@ export function createInboundMessaging(options: {
           ? 'This account is already paired with this Bot. / 此账号已与当前 Bot 配对。'
           : request.status === 'expired'
             ? 'This pairing request expired. Send a new /pair message to request review. / 配对申请已过期，请重新发送 /pair 申请审核。'
-            : `Pairing request ${request.reference} is waiting for Web administrator review. It expires in 10 minutes and grants no permission until approved. / 配对申请 ${request.reference} 等待 Web 管理员审核，10 分钟后过期；审核前没有管理权限。`;
+            : event.channel === 'weixin'
+              ? `Request ${request.reference} needs your authenticated Host's pairing-review with manage-profile and --confirm. Verify this account and sender first; it expires in 10 minutes and grants nothing yet. / 申请 ${request.reference} 需在已认证的 Host 用 pairing-review、manage-profile 和 --confirm 确认。请先核对账号与发件人；10 分钟后过期，当前没有新增权限。`
+              : `Pairing request ${request.reference} is waiting for Web administrator review. It expires in 10 minutes and grants no permission until approved. / 配对申请 ${request.reference} 等待 Web 管理员审核，10 分钟后过期；审核前没有管理权限。`;
     } catch (error) {
       if (
         !(error instanceof MessagingError) ||

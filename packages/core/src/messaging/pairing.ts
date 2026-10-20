@@ -18,6 +18,7 @@ export const pairingCapabilities = [
   'answer',
   'save-rules',
   'review-pairing',
+  'manage-profile',
 ] as const;
 export type PairingCapability = (typeof pairingCapabilities)[number];
 export const pairingReviewInput = z.discriminatedUnion('kind', [
@@ -26,7 +27,12 @@ export const pairingReviewInput = z.discriminatedUnion('kind', [
       kind: z.literal('approve'),
       id: z.string().uuid(),
       expectedRevision: z.number().int().positive(),
-      capabilities: z.array(z.enum(pairingCapabilities)).min(1).max(5).optional(),
+      capabilities: z
+        .array(z.enum(pairingCapabilities))
+        .min(1)
+        .max(pairingCapabilities.length)
+        .optional(),
+      confirmHuman: z.literal(true).optional(),
       roleId: z.string().uuid().optional(),
       expectedRoleRevision: z.number().int().positive().optional(),
     })
@@ -45,12 +51,40 @@ export const pairingReviewInput = z.discriminatedUnion('kind', [
     .strict(),
 ]);
 export type PairingReviewInput = z.infer<typeof pairingReviewInput>;
+
+// Management pairing is separate from conversation roles and sender admission.
+export function managementPairingApplies(event: Omit<MessagingInboundEvent, 'text'>): boolean {
+  if (event.channel === 'feishu')
+    return event.conversation.kind === 'dm' && chatSenderIdentity(event) !== undefined;
+  return (
+    event.channel === 'weixin' &&
+    event.actor.kind === 'user' &&
+    event.actor.id.length > 0 &&
+    event.conversation.kind === 'dm' &&
+    event.conversation.id === event.actor.id &&
+    event.reply.actorId === event.actor.id &&
+    event.reply.conversationId === event.conversation.id &&
+    event.reply.messageId === event.messageId &&
+    !event.reply.threadId &&
+    !event.reply.rootId &&
+    !event.reply.parentId
+  );
+}
+
 export interface PairingRequest {
   id: string;
   reference: string;
   botSlug: string;
   bindingId: string;
   accountName: string;
+  accountRef?: string;
+  fingerprint?: string;
+  humanAuthorization?: {
+    humanId: 'local-human';
+    accountRef: string;
+    fingerprint: string;
+    afterSourceRowid: number;
+  };
   actorId: string;
   actorName?: string;
   conversationId: string;
@@ -173,8 +207,7 @@ export function createBotPairing(
           !isBotActive(binding.botSlug) ||
           binding.platform !== event.channel ||
           binding.providerId !== `dsh-im/${event.channel}` ||
-          !chatSenderIdentity(event) ||
-          (purpose === 'management' && event.channel !== 'feishu') ||
+          !(purpose === 'management' ? managementPairingApplies(event) : chatSenderIdentity(event)) ||
           event.botId !== binding.accountRef ||
           event.fingerprint !== binding.fingerprint ||
           (purpose === 'management' && event.conversation.kind !== 'dm') ||
@@ -241,6 +274,10 @@ export function createBotPairing(
           botSlug: binding.botSlug,
           bindingId,
           accountName: binding.name,
+          accountRef: binding.accountRef,
+          fingerprint: binding.fingerprint,
+          purpose,
+          conversationKind: event.conversation.kind,
           actorId: event.actor.id,
           ...(event.actor.name ? { actorName: event.actor.name } : {}),
           conversationId: event.conversation.id,
@@ -252,9 +289,7 @@ export function createBotPairing(
           revision: 1,
           attempts: 1,
           messageIds: [event.messageId],
-          ...(purpose === 'conversation'
-            ? { purpose, reply: event.reply, conversationKind: event.conversation.kind }
-            : {}),
+          ...(purpose === 'conversation' ? { reply: event.reply } : {}),
         };
         db.prepare(
           'INSERT INTO messaging_pairings (id, bot_slug, binding_id, actor_id, status, body, purpose) VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -355,7 +390,35 @@ export function createBotPairing(
               throw new MessagingError('pairing-delegation-denied');
           }
         }
+        let humanAuthorization: PairingRequest['humanAuthorization'];
         if (input.kind === 'approve') {
+          const identity = assertMessagingIdentity(db, value.bindingId);
+          const managesProfile = input.capabilities?.includes('manage-profile') === true;
+          if (managesProfile || input.confirmHuman || identity.platform === 'weixin') {
+            if (
+              reviewer ||
+              !managesProfile ||
+              input.capabilities?.length !== 1 ||
+              input.confirmHuman !== true ||
+              value.purpose !== 'management' ||
+              identity.platform !== 'weixin' ||
+              identity.providerId !== 'dsh-im/weixin' ||
+              value.accountRef !== identity.accountRef ||
+              value.fingerprint !== identity.fingerprint ||
+              value.conversationKind !== 'dm' ||
+              value.conversationId !== value.actorId
+            )
+              throw new MessagingError('human-confirmation-required');
+            const boundary = db
+              .prepare('SELECT COALESCE(MAX(rowid), 0) AS id FROM source_events')
+              .get()!;
+            humanAuthorization = {
+              humanId: 'local-human',
+              accountRef: identity.accountRef,
+              fingerprint: identity.fingerprint,
+              afterSourceRowid: Number(boundary.id),
+            };
+          }
           if (value.purpose === 'conversation') {
             const role = externalUserRoles(db, botSlug).find((role) => role.id === input.roleId);
             if (
@@ -387,6 +450,7 @@ export function createBotPairing(
           ...(input.kind === 'approve' && input.roleId
             ? { roleId: input.roleId, roleRevision: input.expectedRoleRevision! }
             : {}),
+          ...(humanAuthorization ? { humanAuthorization } : {}),
           revision: value.revision + 1,
           reviewedAt,
           updatedAt: reviewedAt,
