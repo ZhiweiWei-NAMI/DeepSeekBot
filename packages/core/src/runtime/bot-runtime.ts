@@ -3406,7 +3406,8 @@ class BotRuntimeImplementation implements BotRuntime {
             if (!this.#externalMessaging) throw new TobError('human-management-required');
             const authority =
               captured ?? this.#externalMessaging.captureManagementAuthority(owner.botSlug, id);
-            authority();
+            // New captures already validate synchronously.
+            if (captured) authority();
             externalAuthorities.set(id, authority);
           } catch {
             throw new TobError(captured ? 'human-management-stale' : 'human-management-required');
