@@ -4519,6 +4519,12 @@ class BotRuntimeImplementation implements BotRuntime {
               refuse('private-source-required');
               return;
             }
+            if (result.text.length > 4000) {
+              refuse('external-final-text-too-long limit=4000 recovery=bridge_reply_file');
+              throw new Error(
+                'external-final-text-too-long: no message sent; source remains open. Use at most 4000 UTF-16 code units, or channel_attachment_import and bridge_reply_file for the full answer.',
+              );
+            }
             const release = this.#externalMessaging!.privateInputReplyAuthority(
               bot.slug,
               sourceEventId,
